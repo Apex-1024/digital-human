@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>课灵 AI · 批量制课工作台</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">KL</div>
+      <div>
+        <div class="title">课灵 AI · 批量制课工作台</div>
+        <div class="subtitle">导入 PPT → 数字人讲解 → 一键出片</div>
+      </div>
+    </div>
+    <div class="health" id="health">
+      <span class="dot"></span><span class="txt">检测中...</span>
+    </div>
+  </header>
+
+  <main class="layout">
+    <!-- ============== 左侧：上传与配置 ============== -->
+    <section class="panel left">
+      <div class="card">
+        <h2>① 拖入 PPT 文件</h2>
+        <div class="dropzone" id="dropzone">
+          <div class="drop-icon">⬆</div>
+          <div class="drop-text">点击或拖拽 .pptx / .ppt 到这里</div>
+          <div class="drop-hint">最大 200MB · 单文件不超过 80 页效果最佳</div>
+          <input type="file" id="fileInput" accept=".pptx,.ppt" hidden>
+        </div>
+        <div class="file-info" id="fileInfo" hidden>
+          <div class="fi-name" id="fiName">—</div>
+          <div class="fi-meta" id="fiMeta">—</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>② 选择数字人</h2>
+        <div class="avatar-grid" id="avatarGrid"></div>
+      </div>
+
+      <div class="card">
+        <h2>③ 选择声音</h2>
+        <select class="select" id="voiceSelect"></select>
+      </div>
+
+      <div class="card">
+        <h2>④ 输出设置</h2>
+        <div class="form-row">
+          <label>画幅</label>
+          <div class="seg" id="ratioSeg">
+            <button data-val="16:9" class="active">16:9 横屏</button>
+            <button data-val="9:16">9:16 竖屏</button>
+            <button data-val="1:1">1:1 方屏</button>
+          </div>
+        </div>
+        <div class="form-row">
+          <label>分辨率</label>
+          <div class="seg" id="resSeg">
+            <button data-val="720p" class="active">720P</button>
+            <button data-val="1080p">1080P</button>
+          </div>
+        </div>
+        <div class="form-row">
+          <label class="check">
+            <input type="checkbox" id="optSubtitle" checked> 烧录字幕
+          </label>
+          <label class="check">
+            <input type="checkbox" id="optBgm" checked> 背景音乐
+          </label>
+        </div>
+      </div>
+
+      <button class="btn primary" id="btnSubmit" disabled>
+        🚀 开始批量制课
+      </button>
+    </section>
+
+    <!-- ============== 右侧：任务列表 ============== -->
+    <section class="panel right">
+      <div class="card">
+        <div class="card-head">
+          <h2>📋 任务列表</h2>
+          <button class="btn ghost" id="btnRefresh">↻ 刷新</button>
+        </div>
+        <div class="job-list" id="jobList">
+          <div class="empty">还没有任务，先拖入 PPT 吧 ✨</div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

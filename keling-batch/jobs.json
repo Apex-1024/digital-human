@@ -1,0 +1,242 @@
+{
+  "jobs": [
+    {
+      "job_id": "429e2779",
+      "filename": "ee77e6aa_06ad6107-9c4c-44bc-95b2-a93d6bbb4847_df06e061-d58c-489e-8006-683cd511b6b3_5.2_.pptx",
+      "pptx_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\uploads\\ee77e6aa_06ad6107-9c4c-44bc-95b2-a93d6bbb4847_df06e061-d58c-489e-8006-683cd511b6b3_5.2_.pptx",
+      "status": "done",
+      "progress": 1.0,
+      "stage": "完成",
+      "avatar": "teacher_female",
+      "voice": "zh-CN-XiaoxiaoNeural",
+      "ratio": "16:9",
+      "resolution": "720p",
+      "enable_subtitle": false,
+      "enable_bgm": false,
+      "scenes": [
+        {
+          "index": 0,
+          "title": "引言：内容概要",
+          "bullets": [
+            "定积分作为一种无穷和的极限，按极限计算的方法求值是十分困难的，正是由于这一原因积分学一直没有能够得到进一步的发展.",
+            "这类和式极限直到十七世纪后期，才由两位天才的数学家牛顿和莱布尼兹几乎在同时分别找到了计算的方法 — 牛顿-莱布尼兹公式，而正是由于这一公式的建立，才产生了微积分这门对近代社会产生巨大影响的数学.",
+            "“微积分基本公式”"
+          ],
+          "image_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\uploads\\_slides_ee77e6aa_06ad6107-9c4c-44bc-95b2-a93d6bbb4847_df06e061-d58c-489e-8006-683cd511b6b3_5.2_\\slide_0.png",
+          "script": "引言：内容概要。 定积分作为一种无穷和的极限，按极限计算的方法求值是十分困难的，正是由于这一原因积分学一直没有能够得到进一步的发展。 这类和式极限直到十七世纪后期，才由两位天才的数学家牛顿和莱布尼兹几乎在同时分别找到了计算的方法 — 牛顿-莱布尼兹公式，而正是由于这一公式的建立，才产生了微积分这门对近代社会产生巨大影响的数学。 “微积分基本公式”。",
+          "audio_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\output\\429e2779\\audio\\scene_000.mp3",
+          "duration_sec": 35.18
+        },
+        {
+          "index": 1,
+          "title": "（一）问题的提出",
+          "bullets": [
+            "问题：变速直线运动中位置函数与速度函数的联系.",
+            "运动路程为：",
+            "又设位置函数为s(t)，则路程为："
+          ],
+          "image_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\uploads\\_slides_ee77e6aa_06ad6107-9c4c-44bc-95b2-a93d6bbb4847_df06e061-d58c-489e-8006-683cd511b6b3_5.2_\\slide_1.png",
+          "script": "（一）问题的提出。 问题：变速直线运动中位置函数与速度函数的联系。 运动路程为：。 又设位置函数为s(t)，则路程为：。",
+          "audio_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\output\\429e2779\\audio\\scene_001.mp3",
+          "duration_sec": 12.91
+        },
+        {
+          "index": 2,
+          "title": "（一）问题的提出",
+          "bullets": [],
+          "image_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\uploads\\_slides_ee77e6aa_06ad6107-9c4c-44bc-95b2-a93d6bbb4847_df06e061-d58c-489e-8006-683cd511b6b3_5.2_\\slide_2.png",
+          "script": "（一）问题的提出。",
+          "audio_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\output\\429e2779\\audio\\scene_002.mp3",
+          "duration_sec": 2.02
+        },
+        {
+          "index": 3,
+          "title": "（一）问题的提出",
+          "bullets": [],
+          "image_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\uploads\\_slides_ee77e6aa_06ad6107-9c4c-44bc-95b2-a93d6bbb4847_df06e061-d58c-489e-8006-683cd511b6b3_5.2_\\slide_3.png",
+          "script": "（一）问题的提出。",
+          "audio_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\output\\429e2779\\audio\\scene_003.mp3",
+          "duration_sec": 2.02
+        },
+        {
+          "index": 4,
+          "title": "（二）积分上限函数及其导数",
+          "bullets": [
+            "考察定积分",
+            "记",
+            "积分上限函数",
+            "(x：自变量，t：积分变量)"
+          ],
+          "image_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\uploads\\_slides_ee77e6aa_06ad6107-9c4c-44bc-95b2-a93d6bbb4847_df06e061-d58c-489e-8006-683cd511b6b3_5.2_\\slide_4.png",
+          "script": "（二）积分上限函数及其导数。 考察定积分。 记。 积分上限函数。 (x：自变量，t：积分变量)。",
+          "audio_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\output\\429e2779\\audio\\scene_004.mp3",
+          "duration_sec": 11.71
+        },
+        {
+          "index": 5,
+          "title": "（二）积分上限函数及其导数",
+          "bullets": [],
+          "image_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\uploads\\_slides_ee77e6aa_06ad6107-9c4c-44bc-95b2-a93d6bbb4847_df06e061-d58c-489e-8006-683cd511b6b3_5.2_\\slide_5.png",
+          "script": "（二）积分上限函数及其导数。",
+          "audio_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\output\\429e2779\\audio\\scene_005.mp3",
+          "duration_sec": 3.43
+        },
+        {
+          "index": 6,
+          "title": "（二）积分上限函数及其导数",
+          "bullets": [
+            "证明："
+          ],
+          "image_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\uploads\\_slides_ee77e6aa_06ad6107-9c4c-44bc-95b2-a93d6bbb4847_df06e061-d58c-489e-8006-683cd511b6b3_5.2_\\slide_6.png",
+          "script": "（二）积分上限函数及其导数。 证明：。",
+          "audio_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\output\\429e2779\\audio\\scene_006.mp3",
+          "duration_sec": 4.56
+        },
+        {
+          "index": 7,
+          "title": "（二）积分上限函数及其导数",
+          "bullets": [
+            "由积分中值定理得"
+          ],
+          "image_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\uploads\\_slides_ee77e6aa_06ad6107-9c4c-44bc-95b2-a93d6bbb4847_df06e061-d58c-489e-8006-683cd511b6b3_5.2_\\slide_7.png",
+          "script": "（二）积分上限函数及其导数。 由积分中值定理得。",
+          "audio_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\output\\429e2779\\audio\\scene_007.mp3",
+          "duration_sec": 5.69
+        },
+        {
+          "index": 8,
+          "title": "（二）积分上限函数及其导数",
+          "bullets": [],
+          "image_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\uploads\\_slides_ee77e6aa_06ad6107-9c4c-44bc-95b2-a93d6bbb4847_df06e061-d58c-489e-8006-683cd511b6b3_5.2_\\slide_8.png",
+          "script": "（二）积分上限函数及其导数。",
+          "audio_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\output\\429e2779\\audio\\scene_008.mp3",
+          "duration_sec": 3.43
+        }
+      ],
+      "output_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\output\\429e2779\\final\\ee77e6aa_06ad6107-9c4c-44bc-95b2-a93d6bbb4847_df06e061-d58c-489e-8006-683cd511b6b3_5.2_.mp4",
+      "error": null,
+      "created_at": 1782398538.8581543,
+      "started_at": 1782398538.8581543,
+      "finished_at": 1782398580.9154112
+    },
+    {
+      "job_id": "5d8c6e08",
+      "filename": "a5d5fe1e_5.2_.pptx",
+      "pptx_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\uploads\\a5d5fe1e_5.2_.pptx",
+      "status": "done",
+      "progress": 1.0,
+      "stage": "完成",
+      "avatar": "teacher_female",
+      "voice": "zh-CN-XiaoxiaoNeural",
+      "ratio": "16:9",
+      "resolution": "720p",
+      "enable_subtitle": true,
+      "enable_bgm": true,
+      "scenes": [
+        {
+          "index": 0,
+          "title": "引言：内容概要",
+          "bullets": [
+            "定积分作为一种无穷和的极限，按极限计算的方法求值是十分困难的，正是由于这一原因积分学一直没有能够得到进一步的发展.",
+            "这类和式极限直到十七世纪后期，才由两位天才的数学家牛顿和莱布尼兹几乎在同时分别找到了计算的方法 — 牛顿-莱布尼兹公式，而正是由于这一公式的建立，才产生了微积分这门对近代社会产生巨大影响的数学.",
+            "“微积分基本公式”"
+          ],
+          "image_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\uploads\\_slides_a5d5fe1e_5.2_\\slide_0.png",
+          "script": "引言：内容概要。 定积分作为一种无穷和的极限，按极限计算的方法求值是十分困难的，正是由于这一原因积分学一直没有能够得到进一步的发展。 这类和式极限直到十七世纪后期，才由两位天才的数学家牛顿和莱布尼兹几乎在同时分别找到了计算的方法 — 牛顿-莱布尼兹公式，而正是由于这一公式的建立，才产生了微积分这门对近代社会产生巨大影响的数学。 “微积分基本公式”。",
+          "audio_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\output\\5d8c6e08\\audio\\scene_000.mp3",
+          "duration_sec": 35.18
+        },
+        {
+          "index": 1,
+          "title": "（一）问题的提出",
+          "bullets": [
+            "问题：变速直线运动中位置函数与速度函数的联系.",
+            "运动路程为：",
+            "又设位置函数为s(t)，则路程为："
+          ],
+          "image_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\uploads\\_slides_a5d5fe1e_5.2_\\slide_1.png",
+          "script": "（一）问题的提出。 问题：变速直线运动中位置函数与速度函数的联系。 运动路程为：。 又设位置函数为s(t)，则路程为：。",
+          "audio_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\output\\5d8c6e08\\audio\\scene_001.mp3",
+          "duration_sec": 12.91
+        },
+        {
+          "index": 2,
+          "title": "（一）问题的提出",
+          "bullets": [],
+          "image_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\uploads\\_slides_a5d5fe1e_5.2_\\slide_2.png",
+          "script": "（一）问题的提出。",
+          "audio_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\output\\5d8c6e08\\audio\\scene_002.mp3",
+          "duration_sec": 2.02
+        },
+        {
+          "index": 3,
+          "title": "（一）问题的提出",
+          "bullets": [],
+          "image_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\uploads\\_slides_a5d5fe1e_5.2_\\slide_3.png",
+          "script": "（一）问题的提出。",
+          "audio_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\output\\5d8c6e08\\audio\\scene_003.mp3",
+          "duration_sec": 2.02
+        },
+        {
+          "index": 4,
+          "title": "（二）积分上限函数及其导数",
+          "bullets": [
+            "考察定积分",
+            "记",
+            "积分上限函数",
+            "(x：自变量，t：积分变量)"
+          ],
+          "image_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\uploads\\_slides_a5d5fe1e_5.2_\\slide_4.png",
+          "script": "（二）积分上限函数及其导数。 考察定积分。 记。 积分上限函数。 (x：自变量，t：积分变量)。",
+          "audio_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\output\\5d8c6e08\\audio\\scene_004.mp3",
+          "duration_sec": 11.71
+        },
+        {
+          "index": 5,
+          "title": "（二）积分上限函数及其导数",
+          "bullets": [],
+          "image_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\uploads\\_slides_a5d5fe1e_5.2_\\slide_5.png",
+          "script": "（二）积分上限函数及其导数。",
+          "audio_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\output\\5d8c6e08\\audio\\scene_005.mp3",
+          "duration_sec": 3.43
+        },
+        {
+          "index": 6,
+          "title": "（二）积分上限函数及其导数",
+          "bullets": [
+            "证明："
+          ],
+          "image_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\uploads\\_slides_a5d5fe1e_5.2_\\slide_6.png",
+          "script": "（二）积分上限函数及其导数。 证明：。",
+          "audio_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\output\\5d8c6e08\\audio\\scene_006.mp3",
+          "duration_sec": 4.56
+        },
+        {
+          "index": 7,
+          "title": "（二）积分上限函数及其导数",
+          "bullets": [
+            "由积分中值定理得"
+          ],
+          "image_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\uploads\\_slides_a5d5fe1e_5.2_\\slide_7.png",
+          "script": "（二）积分上限函数及其导数。 由积分中值定理得。",
+          "audio_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\output\\5d8c6e08\\audio\\scene_007.mp3",
+          "duration_sec": 5.69
+        },
+        {
+          "index": 8,
+          "title": "（二）积分上限函数及其导数",
+          "bullets": [],
+          "image_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\uploads\\_slides_a5d5fe1e_5.2_\\slide_8.png",
+          "script": "（二）积分上限函数及其导数。",
+          "audio_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\output\\5d8c6e08\\audio\\scene_008.mp3",
+          "duration_sec": 3.43
+        }
+      ],
+      "output_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\output\\5d8c6e08\\final\\a5d5fe1e_5.2_.mp4",
+      "error": null,
+      "created_at": 1782398732.799091,
+      "started_at": 1782398732.8006108,
+      "finished_at": 1782398769.2985396
+    }
+  ]
+}
