@@ -40,6 +40,16 @@
       <div class="card">
         <h2>② 选择数字人</h2>
         <div class="avatar-grid" id="avatarGrid"></div>
+        <div class="form-row" style="margin-top:12px">
+          <label>数字人模式</label>
+          <div class="seg" id="dhModeSeg">
+            <button data-val="auto" class="active">AI 对口型 (SadTalker)</button>
+            <button data-val="static">静态头像</button>
+          </div>
+        </div>
+        <p class="hint" id="dhHint" style="font-size:12px;color:var(--muted);margin-top:6px">
+          AI 对口型需先运行 setup_sadtalker.bat 安装，CPU 模式每页约 5-10 分钟
+        </p>
       </div>
 
       <div class="card">

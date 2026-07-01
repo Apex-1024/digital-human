@@ -7,6 +7,7 @@ const state = {
   voice: 'zh-CN-XiaoxiaoNeural',
   ratio: '16:9',
   resolution: '720p',
+  digitalHumanMode: 'auto',
   enableSubtitle: true,
   enableBgm: true,
   jobs: [],
@@ -39,9 +40,32 @@ async function init() {
   await checkHealth();
   await loadAvatars();
   await loadVoices();
+  await checkDigitalHumanStatus();
   await loadJobs();
   bindEvents();
   startPolling();
+}
+
+async function checkDigitalHumanStatus() {
+  try {
+    const r = await api.get('/api/digital_human_status');
+    const hint = $('dhHint');
+    if (r.sadtalker_installed) {
+      hint.textContent = 'SadTalker 已安装，AI 对口型模式可用（CPU 模式每页约 5-10 分钟）';
+      hint.style.color = '#36d6c0';
+    } else {
+      hint.textContent = 'SadTalker 未安装，当前使用静态头像模式。运行 setup_sadtalker.bat 安装 AI 对口型';
+      hint.style.color = '#ff6ba0';
+      // 自动切换到 static 模式
+      state.digitalHumanMode = 'static';
+      const seg = $('dhModeSeg');
+      seg.querySelectorAll('button').forEach(b => {
+        b.classList.toggle('active', b.dataset.val === 'static');
+      });
+    }
+  } catch (e) {
+    console.log('digital human status check failed', e);
+  }
 }
 
 async function checkHealth() {
@@ -97,9 +121,10 @@ function bindEvents() {
   };
   fi.onchange = (e) => { if (e.target.files[0]) handleFile(e.target.files[0]); };
 
-  // 画幅 / 分辨率
+  // 画幅 / 分辨率 / 数字人模式
   bindSeg('ratioSeg', 'ratio');
   bindSeg('resSeg', 'resolution');
+  bindSeg('dhModeSeg', 'digitalHumanMode');
 
   // 复选
   $('optSubtitle').onchange = (e) => state.enableSubtitle = e.target.checked;
@@ -157,6 +182,7 @@ async function submitJob() {
     voice: state.voice,
     ratio: state.ratio,
     resolution: state.resolution,
+    digital_human_mode: state.digitalHumanMode,
     enable_subtitle: state.enableSubtitle,
     enable_bgm: state.enableBgm,
   });

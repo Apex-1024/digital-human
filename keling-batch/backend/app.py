@@ -84,6 +84,18 @@ def list_voices():
     return jsonify({"voices": VOICES})
 
 
+@app.route("/api/digital_human_status")
+def digital_human_status():
+    """检查 SadTalker 是否已安装"""
+    sadtalker_dir = BASE_DIR / "sadtalker"
+    inference_py = sadtalker_dir / "inference.py"
+    installed = inference_py.exists()
+    return jsonify({
+        "sadtalker_installed": installed,
+        "mode": "auto" if installed else "static"
+    })
+
+
 @app.route("/api/upload", methods=["POST"])
 def upload_ppt():
     if "file" not in request.files:
@@ -128,6 +140,7 @@ def create_job():
         voice=data.get("voice", "zh-CN-XiaoxiaoNeural"),
         ratio=data.get("ratio", "16:9"),
         resolution=data.get("resolution", "720p"),
+        digital_human_mode=data.get("digital_human_mode", "auto"),
         enable_subtitle=bool(data.get("enable_subtitle", True)),
         enable_bgm=bool(data.get("enable_bgm", True)),
     )
