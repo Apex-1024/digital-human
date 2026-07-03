@@ -1,16 +1,4 @@
-"""
-课灵 AI 批量制课系统 — Flask API
-提供：
-  POST /api/upload          上传 PPT
-  POST /api/jobs            创建制课任务
-  GET  /api/jobs            列出所有任务
-  GET  /api/jobs/<id>       查询任务详情
-  POST /api/jobs/<id>/cancel 取消任务
-  GET  /api/jobs/<id>/download 下载成片
-  DELETE /api/jobs/<id>     删除任务
-  GET  /api/avatars         数字人列表
-  GET  /api/voices          音色列表
-"""
+"""课灵 AI 批量制课系统 — Flask API"""
 import os
 import uuid
 import json
@@ -35,14 +23,11 @@ app = Flask(__name__, static_folder=str(BASE_DIR / "frontend" / "static"),
             template_folder=str(BASE_DIR / "frontend" / "templates"))
 CORS(app)
 
-# 全局线程池（最多同时跑 2 个制课任务，避免机器卡死）
 executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="keling-job")
 
 ALLOWED_EXT = {".pptx", ".ppt"}
 MAX_SIZE_MB = 200
 
-
-# ============ 数字人 / 音色配置 ============
 AVATARS = [
     {"id": "teacher_female", "name": "女教师·亲和", "preview": "teacher_female.png"},
     {"id": "teacher_male", "name": "男教师·沉稳", "preview": "teacher_male.png"},
@@ -63,7 +48,6 @@ VOICES = [
 ]
 
 
-# ============ 路由 ============
 @app.route("/")
 def index():
     return send_from_directory(app.template_folder, "index.html")
@@ -86,14 +70,9 @@ def list_voices():
 
 @app.route("/api/digital_human_status")
 def digital_human_status():
-    """检查 SadTalker 是否已安装"""
     sadtalker_dir = BASE_DIR / "sadtalker"
-    inference_py = sadtalker_dir / "inference.py"
-    installed = inference_py.exists()
-    return jsonify({
-        "sadtalker_installed": installed,
-        "mode": "auto" if installed else "static"
-    })
+    installed = (sadtalker_dir / "inference.py").exists()
+    return jsonify({"sadtalker_installed": installed, "mode": "auto" if installed else "static"})
 
 
 @app.route("/api/upload", methods=["POST"])
@@ -106,7 +85,6 @@ def upload_ppt():
     ext = Path(f.filename).suffix.lower()
     if ext not in ALLOWED_EXT:
         return jsonify({"error": f"不支持的文件格式 {ext}，仅接受 {ALLOWED_EXT}"}), 400
-    # 大小校验
     f.seek(0, os.SEEK_END)
     size_mb = f.tell() / 1024 / 1024
     f.seek(0)
@@ -117,12 +95,7 @@ def upload_ppt():
     save_path = UPLOAD_DIR / f"{uuid.uuid4().hex[:8]}_{safe_name}"
     f.save(save_path)
     log.info(f"已上传：{save_path} ({size_mb:.2f}MB)")
-
-    return jsonify({
-        "path": str(save_path),
-        "filename": safe_name,
-        "size_mb": round(size_mb, 2)
-    })
+    return jsonify({"path": str(save_path), "filename": safe_name, "size_mb": round(size_mb, 2)})
 
 
 @app.route("/api/jobs", methods=["POST"])
@@ -174,12 +147,9 @@ def delete_job(job_id):
     job = store.get(job_id)
     if not job:
         return jsonify({"error": "任务不存在"}), 404
-    # 删除输出文件
     if job.output_path:
-        Path(job.output_path).parent.parent.mkdir(parents=True, exist_ok=True)
         try:
-            shutil_path = Path(job.output_path)
-            for f in shutil_path.parent.iterdir():
+            for f in Path(job.output_path).parent.iterdir():
                 if f.is_file():
                     f.unlink()
         except Exception as e:
@@ -228,12 +198,10 @@ def _check_ffmpeg():
 
 
 if __name__ == "__main__":
-    import shutil
-    # 检查 ffmpeg
     if not _check_ffmpeg():
-        log.warning("⚠️  未检测到 ffmpeg，请先安装并加入 PATH")
-    log.info("🚀 课灵 AI 批量制课系统启动")
-    log.info(f"   上传目录：{UPLOAD_DIR}")
-    log.info(f"   输出目录：{OUTPUT_DIR}")
-    log.info(f"   资源目录：{ASSETS_DIR}")
+        log.warning("未检测到 ffmpeg")
+    log.info("课灵 AI 批量制课系统启动")
+    log.info(f"上传目录：{UPLOAD_DIR}")
+    log.info(f"输出目录：{OUTPUT_DIR}")
+    log.info(f"资源目录：{ASSETS_DIR}")
     app.run(host="0.0.0.0", port=7860, debug=False, threaded=True)

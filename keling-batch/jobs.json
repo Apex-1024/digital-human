@@ -1,3 +1,41 @@
 {
-  "jobs": []
+  "jobs": [
+    {
+      "job_id": "d19fd73a",
+      "filename": "6d29d4b5_test.pptx",
+      "pptx_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\uploads\\6d29d4b5_test.pptx",
+      "status": "done",
+      "progress": 1.0,
+      "stage": "完成",
+      "avatar": "teacher_female",
+      "voice": "zh-CN-XiaoxiaoNeural",
+      "ratio": "16:9",
+      "resolution": "720p",
+      "digital_human_mode": "static",
+      "enable_subtitle": true,
+      "enable_bgm": true,
+      "scenes": [
+        {
+          "index": 0,
+          "title": "（一）问题的提出",
+          "bullets": [
+            "问题：变速直线运动中位置函数与速度函数的联系.",
+            "运动路程为：",
+            "设某物体作直线运动，速度是v  v(t)，且v(t)  0，在时间段[T1,T2 ]内：",
+            "又设位置函数为s(t)，则路程为：s(T2 )  s(T1 )",
+            "@@FORMULA@@\\nu(t)d t=s(T_{2})-s(T_{1})."
+          ],
+          "image_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\uploads\\_slides_6d29d4b5_test\\slide_0.png",
+          "script": "（一）问题的提出。 问题：变速直线运动中位置函数与速度函数的联系。 运动路程为：。 设某物体作直线运动，速度是v 等于 v(t)，且v(t) 大于等于 0，在时间段 T1 到 T2 内：。 又设位置函数为s(t)，则路程为：s(T2 ) 减 s(T1 )。 v ( t ) d t 等于 s ( T 2 ) 减 s ( T 1 ) .。",
+          "audio_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\output\\d19fd73a\\audio\\scene_000.mp3",
+          "duration_sec": 28.99
+        }
+      ],
+      "output_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\output\\d19fd73a\\final\\6d29d4b5_test.mp4",
+      "error": null,
+      "created_at": 1783003405.701466,
+      "started_at": 1783003405.7020652,
+      "finished_at": 1783003425.4355383
+    }
+  ]
 }

@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>课灵 AI 批量制课系统 — 深入拆解学习计划</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --card: #1a1d2e;
+    --border: #2a2f45;
+    --accent: #6c8cff;
+    --accent2: #36d6c0;
+    --text: #d0d4e8;
+    --text2: #9aa1c7;
+    --code-bg: #13151f;
+    --warn: #ffb366;
+    --success: #4caf84;
+    --danger: #e0556a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.72;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 6rem;
+  }
+  h1 {
+    font-size: 2rem;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 0.3rem;
+  }
+  h2 {
+    font-size: 1.4rem;
+    color: var(--accent);
+    margin: 2.5rem 0 1rem;
+    padding-bottom: 0.4rem;
+    border-bottom: 2px solid var(--border);
+  }
+  h3 {
+    font-size: 1.1rem;
+    color: var(--accent2);
+    margin: 1.5rem 0 0.6rem;
+  }
+  .subtitle { color: var(--text2); font-size: 0.9rem; margin-bottom: 2rem; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.2rem 1.5rem;
+    margin: 1rem 0;
+  }
+  .card h4 { color: var(--accent); margin-bottom: 0.5rem; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; }
+  .tag {
+    display: inline-block;
+    padding: 0.15rem 0.6rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-right: 0.4rem;
+  }
+  .tag-py { background: #30699820; color: #ffd43b; border: 1px solid #30699840; }
+  .tag-ff { background: #00780820; color: #007808; border: 1px solid #00780840; }
+  .tag-ml { background: #e0556a20; color: var(--danger); border: 1px solid #e0556a40; }
+  .tag-ocr { background: #36d6c020; color: var(--accent2); border: 1px solid #36d6c040; }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem 1.2rem;
+    overflow-x: auto;
+    font-size: 0.82rem;
+    line-height: 1.6;
+    margin: 0.8rem 0;
+  }
+  code {
+    font-family: "Cascadia Code", "Fira Code", "Consolas", monospace;
+    font-size: 0.83rem;
+  }
+  pre code { font-size: 0.82rem; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+    font-size: 0.88rem;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 0.5rem 0.8rem;
+    text-align: left;
+  }
+  th {
+    background: var(--card);
+    color: var(--accent);
+    font-weight: 600;
+  }
+  tr:nth-child(even) { background: #1a1d2e40; }
+  ul, ol { padding-left: 1.5rem; margin: 0.5rem 0; }
+  li { margin: 0.3rem 0; }
+  .milestone {
+    border-left: 3px solid var(--accent);
+    padding-left: 1rem;
+    margin: 1.2rem 0;
+  }
+  .milestone.done { border-left-color: var(--success); }
+  .milestone h4 { margin-bottom: 0.3rem; }
+  .flow {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+    margin: 1rem 0;
+    font-size: 0.85rem;
+  }
+  .flow-box {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.4rem 0.8rem;
+    white-space: nowrap;
+  }
+  .flow-arrow { color: var(--accent); font-weight: bold; }
+  .toc { margin: 1.5rem 0; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .highlight { color: var(--warn); font-weight: 600; }
+  .note {
+    background: #ffb36610;
+    border: 1px solid #ffb36630;
+    border-radius: 8px;
+    padding: 0.8rem 1.2rem;
+    margin: 1rem 0;
+    font-size: 0.88rem;
+  }
+  .note::before { content: "💡 "; }
+</style>
+</head>
+<body>
+
+<h1>课灵 AI 批量制课系统</h1>
+<p class="subtitle">深入拆解学习计划 — 基于 project-based learning 方法论，从零理解一个完整的 PPT→数字人视频生成管线</p>
+
+<!-- ============ 目录 ============ -->
+<div class="toc">
+  <strong>目录</strong>
+  <ol>
+    <li><a href="#overview">项目概览与架构</a></li>
+    <li><a href="#philosophy">学习哲学</a></li>
+    <li><a href="#pipeline">核心数据管线</a></li>
+    <li><a href="#module1">模块一：PPT 解析与渲染</a></li>
+    <li><a href="#module2">模块二：OCR 数学公式识别</a></li>
+    <li><a href="#module3">模块三：符号转中文口播</a></li>
+    <li><a href="#module4">模块四：TTS 语音合成</a></li>
+    <li><a href="#module5">模块五：视频合成与布局</a></li>
+    <li><a href="#module6">模块六：任务队列与 API</a></li>
+    <li><a href="#milestones">学习里程碑路线图</a></li>
+    <li><a href="#lessons">实战避坑经验</a></li>
+  </ol>
+</div>
+
+<!-- ============ 1. 项目概览 ============ -->
+<h2 id="overview">1. 项目概览与架构</h2>
+
+<div class="card">
+  <h4>一句话描述</h4>
+  <p>把任意 <code>.pptx</code> 拖进去，自动解析、生成口播文案、合成语音、渲染数字人视频成片。</p>
+</div>
+
+<div class="grid">
+  <div class="card">
+    <h4>技术栈</h4>
+    <p><span class="tag tag-py">Python 3.11</span><span class="tag tag-py">Flask</span><span class="tag tag-py">python-pptx</span></p>
+    <p><span class="tag tag-ff">FFmpeg</span><span class="tag tag-ocr">RapidOCR</span><span class="tag tag-ocr">pix2tex</span></p>
+    <p><span class="tag tag-ml">edge-tts</span><span class="tag tag-ml">PowerPoint COM</span></p>
+  </div>
+  <div class="card">
+    <h4>项目分类</h4>
+    <p><strong>Applied/Build</strong> — 构建完整产品</p>
+    <p>+ <strong>Algorithm/Domain</strong> — OCR / 数学符号处理</p>
+    <p>+ <strong>Infrastructure</strong> — FFmpeg 视频管线</p>
+  </div>
+</div>
+
+<h3>架构全景图</h3>
+<div class="flow">
+  <div class="flow-box">📄 PPTX 上传</div>
+  <span class="flow-arrow">→</span>
+  <div class="flow-box">🔧 PowerPoint COM 转 PDF</div>
+  <span class="flow-arrow">→</span>
+  <div class="flow-box">🖼 pypdfium2 渲染 PNG</div>
+  <span class="flow-arrow">→</span>
+  <div class="flow-box">📝 python-pptx 提取文字</div>
+  <span class="flow-arrow">→</span>
+  <div class="flow-box">🔍 OCR 公式识别</div>
+  <span class="flow-arrow">→</span>
+  <div class="flow-box">📢 数学符号 → 中文口播</div>
+  <span class="flow-arrow">→</span>
+  <div class="flow-box">🔊 edge-tts 合成语音</div>
+  <span class="flow-arrow">→</span>
+  <div class="flow-box">🎬 FFmpeg 合成视频</div>
+  <span class="flow-arrow">→</span>
+  <div class="flow-box">📦 MP4 成片</div>
+</div>
+
+<!-- ============ 2. 学习哲学 ============ -->
+<h2 id="philosophy">2. 学习哲学</h2>
+
+<div class="card">
+  <h4>核心原则</h4>
+  <p>这个项目是 <strong>learn-by-building</strong> 的绝佳案例。它不是单纯"读代码"，而是鼓励你理解每一步之后<strong>亲手重建</strong>：</p>
+  <ol>
+    <li><strong>从零开始</strong> — 每个模块都可以独立重写，从最小可行版本开始</li>
+    <li><strong>迭代叠加</strong> — OCR 先做 RapidOCR 基线，再加 pix2tex 公式增强，最后加符号转中文</li>
+    <li><strong>三级回退</strong> — PPT 渲染（COM → LibreOffice → Pillow）、数字人（SadTalker → 静态头像）都是经典的回退设计模式</li>
+    <li><strong>实战产出</strong> — 每个阶段都有可运行的视频作为验证</li>
+  </ol>
+</div>
+
+<!-- ============ 3. 核心数据管线 ============ -->
+<h2 id="pipeline">3. 核心数据管线</h2>
+
+<pre><code>┌─────────────────────────────────────────────────────────────────┐
+│  PPTX 文件                                                       │
+│  │  ┌─ python-pptx 提取文字（title + bullets）                    │
+│  │  │                                                           │
+│  │  └─ PowerPoint COM → PDF → pypdfium2 → slide_N.png (高清)     │
+│  │       │                                                      │
+│  │       └─ RapidOCR + pix2tex → 公式 LaTeX / 文字补全           │
+│  │              │                                                │
+│  │              └─ 碎片清理 + 去重                                │
+│  ▼                                                               │
+│  Scene { title, bullets, image_path }                            │
+│  │                                                               │
+│  ├─ generate_script()                                            │
+│  │    ├─ math_symbols_to_chinese()  ← 普通文本符号 → 中文        │
+│  │    └─ latex_to_chinese()         ← LaTeX 公式 → 中文口播      │
+│  │                                                               │
+│  ├─ tts_synthesize() → edge-tts → scene_N.mp3 (语音)             │
+│  │                                                               │
+│  └─ render_scene_video() → FFmpeg filter_complex                 │
+│       ├─ 方案 A: SadTalker AI 对口型数字人（若可用）              │
+│       └─ 方案 B: 静态头像左右分栏（不遮挡 PPT）                   │
+│  ▼                                                               │
+│  concatenate_scenes() → MP4 成片                                 │
+└─────────────────────────────────────────────────────────────────┘</code></pre>
+
+<!-- ============ 4. 模块一 ============ -->
+<h2 id="module1">4. 模块一：PPT 解析与渲染</h2>
+
+<h3>4.1 三级回退：PPT → PNG</h3>
+
+<table>
+  <tr><th>方案</th><th>技术</th><th>速度</th><th>质量</th><th>适用场景</th></tr>
+  <tr>
+    <td><strong>方案 A</strong>（首选）</td>
+    <td>PowerPoint COM (pywin32)</td>
+    <td>~2秒</td>
+    <td>⭐⭐⭐ 完美</td>
+    <td>Windows，含公式</td>
+  </tr>
+  <tr>
+    <td><strong>方案 B</strong>（回退）</td>
+    <td>LibreOffice headless</td>
+    <td>~15分钟</td>
+    <td>⭐⭐ 一般</td>
+    <td>Linux/Mac，纯文字</td>
+  </tr>
+  <tr>
+    <td><strong>方案 C</strong>（兜底）</td>
+    <td>Pillow 纯文本重绘</td>
+    <td>~1秒</td>
+    <td>⭐ 公式全丢</td>
+    <td>无 Office 环境</td>
+  </tr>
+</table>
+
+<div class="note">
+  <strong>关键教训：</strong>方案 C 会覆盖方案 A 的高清 PNG，导致公式丢失。必须确保回退链上层的输出不被下层覆盖。
+</div>
+
+<h3>4.2 python-pptx 的局限</h3>
+<p>python-pptx <strong>无法读取 MathType OLE 嵌入对象</strong>（<code>progId="Equation.DSMT4"</code>），导致含公式的段落被提取为残缺文本：</p>
+
+<pre><code>原始 PPT 段落:  ∫_T1^T2 v(t)dt = s(T2) - s(T1)
+
+python-pptx 提取: "  2 v(t)dt  s(T )  s(T )."  ← 公式全丢！</code></pre>
+
+<p>这引出了模块二的核心需求：OCR 补充公式识别。</p>
+
+<!-- ============ 5. 模块二 ============ -->
+<h2 id="module2">5. 模块二：OCR 数学公式识别</h2>
+
+<h3>5.1 双引擎架构</h3>
+
+<table>
+  <tr><th>引擎</th><th>用途</th><th>依赖</th><th>稳定性</th></tr>
+  <tr>
+    <td><strong>RapidOCR</strong>（首选）</td>
+    <td>文字检测 + 文本识别</td>
+    <td>onnxruntime（纯 Python）</td>
+    <td>⭐⭐⭐ 极稳定</td>
+  </tr>
+  <tr>
+    <td><strong>PaddleOCR</strong>（回退）</td>
+    <td>同上</td>
+    <td>paddlepaddle（C++ 编译）</td>
+    <td>⭐⭐ 版本兼容问题多</td>
+  </tr>
+  <tr>
+    <td><strong>pix2tex</strong>（增强）</td>
+    <td>公式图片 → LaTeX</td>
+    <td>ViT + Transformer 模型</td>
+    <td>⭐⭐ 模型大(97MB)，下载慢</td>
+  </tr>
+</table>
+
+<h3>5.2 核心函数：_ocr_slide_image()</h3>
+
+<pre><code>def _ocr_slide_image(image_path: str) -> List[tuple]:
+    """
+    对单页 PPT 渲染图做 OCR，返回 [(text, kind, y), ...]
+      kind = "text"   普通文字
+      kind = "formula" 数学公式（latex 原文）
+    按 y 中心升序排列（与阅读顺序一致）。
+    """
+    # Step 1: 调用 OCR 引擎（RapidOCR / PaddleOCR）
+    # Step 1.5: 去重 — 相同 text + bbox 中心 y 相近(<20px)视为重复
+    # Step 2: 遍历所有块
+    #   - 疑似公式（含 =∫∑√ 等符号 / 低置信度 <0.6）
+    #     → crop 后交给 pix2tex 重识别为 LaTeX
+    #   - 否则保留为普通文字
+    # Step 3: 按 y 升序排列</code></pre>
+
+<h3>5.3 公式判定：_looks_like_formula()</h3>
+
+<pre><code>_MATH_HINT_CHARS = set("=±÷×∑∫√π∞αβγδθλμνΦφΩω≤≥≠≈→←↔∈∉∀∃∝·²³")
+
+def _looks_like_formula(text: str) -> bool:
+    if any(c in _MATH_HINT_CHARS for c in text):
+        return True
+    if "\\" in text or "^" in text or "_" in text:
+        return True
+    digits = sum(1 for c in text if c.isdigit())
+    if "=" in text and digits >= 1:
+        return True
+    return False</code></pre>
+
+<h3>5.4 碎片清理逻辑</h3>
+<p>python-pptx 提取的公式碎片（如 <code>"T1"</code>、<code>"v(t)dt"</code>、<code>"∫"</code>）需被清理。核心策略：</p>
+
+<ol>
+  <li><strong>不含中文</strong> 的 bullet 视为疑似碎片</li>
+  <li>单字符/纯标点(≤2字符) → 直接删除</li>
+  <li>短碎片(≤6字符) → 检查 OCR 是否有更完整版本包含它</li>
+  <li>较长残缺公式(≤10有效字符) → 字符重合≥50% 且 OCR 更长则删除</li>
+</ol>
+
+<!-- ============ 6. 模块三 ============ -->
+<h2 id="module3">6. 模块三：符号转中文口播</h2>
+
+<h3>6.1 双函数体系</h3>
+
+<table>
+  <tr><th>函数</th><th>输入</th><th>输出</th><th>示例</th></tr>
+  <tr>
+    <td><code>latex_to_chinese()</code></td>
+    <td>LaTeX 公式</td>
+    <td>中文口播读法</td>
+    <td><code>\int_a^b f(x)dx</code> → "从 a 到 b 的积分 f(x) 微元 d x"</td>
+  </tr>
+  <tr>
+    <td><code>math_symbols_to_chinese()</code></td>
+    <td>普通文本含符号</td>
+    <td>中文口播读法</td>
+    <td><code>v = v(t), v(t) ≥ 0</code> → "v 等于 v(t), v(t) 大于等于 0"</td>
+  </tr>
+</table>
+
+<h3>6.2 MathType 私有 Unicode 字符映射</h3>
+<p class="highlight">这是本模块最大的隐藏坑：</p>
+<p>python-pptx 提取 MathType 公式时，Symbol 字体字符被映射到 <strong>Private Use Area (U+F000+)</strong>，而不是标准 Unicode 数学符号：</p>
+
+<pre><code>mathtype_map = {
+    "\uf03d": "=",    # equal (Symbol 0x3D)
+    "\uf0b3": "≥",    # greaterequal (Symbol 0xB3)
+    "\uf02d": "-",    # minus (Symbol 0x2D)
+    "\uf0b4": "≠",    # notequal (Symbol 0xB4)
+    # ... 40+ 映射
+}</code></pre>
+
+<h3>6.3 latex_to_chinese 覆盖的 LaTeX 命令</h3>
+<ul>
+  <li><strong>希腊字母</strong>：<code>\alpha</code>→阿尔法, <code>\Phi</code>→弗爱, 等 30+ 个</li>
+  <li><strong>积分</strong>：<code>\int_a^b</code> → "从 a 到 b 的积分"</li>
+  <li><strong>求和</strong>：<code>\sum_{i=1}^n</code> → "i 到 n 求和"</li>
+  <li><strong>分数</strong>：<code>\frac{a}{b}</code> → "b 分之 a"</li>
+  <li><strong>根号</strong>：<code>\sqrt[n]{x}</code> → "n 次根号下 x"</li>
+  <li><strong>上下标</strong>：<code>a^{bc}</code> → "a 的 bc 次方"；单字符下标直接拼接（T_{2}→T2）</li>
+  <li><strong>极限</strong>：<code>\lim_{x\to a}</code> → "极限 x 趋近于 a"</li>
+</ul>
+
+<h3>6.4 math_symbols_to_chinese 覆盖的符号</h3>
+<ul>
+  <li><strong>关系符</strong>：=→等于, ≥→大于等于, ≤→小于等于, ≠→不等于, ≈→约等于</li>
+  <li><strong>算术</strong>：+→加, -→减, ×→乘以, ÷→除以</li>
+  <li><strong>区间</strong>：[T1,T2]→T1 到 T2</li>
+  <li><strong>积分</strong>：∫→积分</li>
+  <li><strong>导数</strong>：s'(t)→s 撇 (t)</li>
+  <li><strong>下标</strong>：仅多字符下标才读"下标"（T12→T 下标 12），单字符直接拼接（T1→T1）</li>
+</ul>
+
+<!-- ============ 7. 模块四 ============ -->
+<h2 id="module4">7. 模块四：TTS 语音合成</h2>
+
+<div class="card">
+  <h4>edge-tts 7.2.8+</h4>
+  <p>必须使用 edge-tts ≥ 7.2.8，旧版本使用已废弃的 <code>Sec-MS-GEC</code> token 算法会返回 403。</p>
+  <p>可用音色：<code>zh-CN-XiaoxiaoNeural</code>（女声）、<code>zh-CN-YunxiNeural</code>（男声）等 7 种中文音色。</p>
+</div>
+
+<pre><code>def tts_synthesize(text: str, voice: str, out_path: str) -> float:
+    """用 edge-tts 合成中文语音，返回音频时长（秒）。失败时回退到 pyttsx3。"""
+    import edge_tts
+    communicate = edge_tts.Communicate(text, voice)
+    asyncio.run(communicate.save(out_path))
+    # 用 ffprobe 获取实际时长
+    return get_audio_duration(out_path)</code></pre>
+
+<!-- ============ 8. 模块五 ============ -->
+<h2 id="module5">8. 模块五：视频合成与布局</h2>
+
+<h3>8.1 数字人三级回退</h3>
+
+<table>
+  <tr><th>方案</th><th>技术</th><th>效果</th></tr>
+  <tr>
+    <td><strong>A. SadTalker</strong></td>
+    <td>AI 单图驱动对口型</td>
+    <td>真人说话效果，右下角叠加</td>
+  </tr>
+  <tr>
+    <td><strong>B. 静态头像</strong></td>
+    <td>FFmpeg overlay</td>
+    <td>左右分栏，PPT 75% + 侧栏 25%</td>
+  </tr>
+</table>
+
+<h3>8.2 左右分栏布局（方案 B）</h3>
+<p>避免头像叠加在 PPT 上遮挡文字（尤其是公式）：</p>
+<pre><code># 布局计算（720p 为例）
+main_w = 960   # PPT 主区域 75%
+side_w = 320   # 侧栏 25%
+avatar_w = 224 # 头像 70% 侧栏宽度
+avatar_x = 960 + (320-224)/2 = 1008  # 头像左侧 1008 > PPT 右侧 960 ✓</code></pre>
+
+<h3>8.3 FFmpeg filter_complex 结构</h3>
+<pre><code>filter_complex = (
+    # 1. PPT 缩放到主区域，保持比例，加黑边
+    "[0:v]scale=960:540:force_original_aspect_ratio=decrease,"
+    "pad=960:540:(ow-iw)/2:(oh-ih)/2:black,setsar=1,fps=25[bg1];"
+
+    # 2. pad 到整画布 1280×720，右侧填深蓝色
+    "[bg1]pad=1280:720:0:90:0x1a1f3a[bg];"
+
+    # 3. 头像缩放
+    "[1:v]scale=224:224,fps=25[avt];"
+
+    # 4. 头像叠加到侧栏居中
+    "[bg][avt]overlay=1008:248[v]"
+)</code></pre>
+
+<!-- ============ 9. 模块六 ============ -->
+<h2 id="module6">9. 模块六：任务队列与 API</h2>
+
+<h3>9.1 jobs.json 持久化结构</h3>
+<pre><code>{
+  "jobs": [{
+    "job_id": "5d8c6e08",
+    "status": "done",        // pending | running | done | failed | canceled
+    "progress": 1.0,         // 0.0 ~ 1.0
+    "stage": "完成",
+    "scenes": [{
+      "index": 0,
+      "title": "引言：内容概要",
+      "bullets": ["第一条要点", "@@FORMULA@@\\int_a^b f(x)dx"],
+      "image_path": ".../slide_0.png",
+      "script": "引言：内容概要。 ...",
+      "audio_path": ".../scene_000.mp3",
+      "duration_sec": 35.18
+    }],
+    "output_path": ".../final/xxx.mp4"
+  }]
+}</code></pre>
+
+<h3>9.2 API 接口清单</h3>
+<table>
+  <tr><th>方法</th><th>路径</th><th>说明</th></tr>
+  <tr><td>POST</td><td><code>/api/upload</code></td><td>上传 PPT</td></tr>
+  <tr><td>POST</td><td><code>/api/jobs</code></td><td>创建任务</td></tr>
+  <tr><td>GET</td><td><code>/api/jobs</code></td><td>任务列表</td></tr>
+  <tr><td>GET</td><td><code>/api/jobs/&lt;id&gt;</code></td><td>任务详情</td></tr>
+  <tr><td>POST</td><td><code>/api/jobs/&lt;id&gt;/cancel</code></td><td>取消任务</td></tr>
+  <tr><td>DELETE</td><td><code>/api/jobs/&lt;id&gt;</code></td><td>删除任务</td></tr>
+  <tr><td>GET</td><td><code>/api/jobs/&lt;id&gt;/download</code></td><td>下载成片</td></tr>
+</table>
+
+<!-- ============ 10. 学习里程碑 ============ -->
+<h2 id="milestones">10. 学习里程碑路线图</h2>
+
+<div class="milestone done">
+  <h4>M0: 环境搭建 ✅</h4>
+  <p>Python 3.11+, 安装依赖：<code>pip install flask python-pptx edge-tts rapidocr-onnxruntime pix2tex pypdfium2 imageio-ffmpeg pywin32</code></p>
+  <p>验证：<code>python backend/app.py</code> → http://localhost:7860</p>
+</div>
+
+<div class="milestone">
+  <h4>M1: 最简 PPT 解析（30 分钟）</h4>
+  <p><strong>目标：</strong>用 python-pptx 提取每页标题和文字，打印到控制台</p>
+  <pre><code>from pptx import Presentation
+prs = Presentation("test.pptx")
+for i, slide in enumerate(prs.slides):
+    for shape in slide.shapes:
+        if shape.has_text_frame:
+            for para in shape.text_frame.paragraphs:
+                print(para.text)</code></pre>
+  <p><strong>验证：</strong>能看到纯文字的 PPT 内容，但公式行是空的</p>
+</div>
+
+<div class="milestone">
+  <h4>M2: PPT 渲染为 PNG（20 分钟）</h4>
+  <p><strong>目标：</strong>用 PowerPoint COM 或 pypdfium2 把每页渲染为高清 PNG</p>
+  <p><strong>核心代码：</strong><code>_pptx_to_images()</code> — COM 转 PDF → pypdfium2 渲染</p>
+  <p><strong>验证：</strong><code>uploads/_slides_xxx/slide_0.png</code> 清晰可见，含公式</p>
+</div>
+
+<div class="milestone">
+  <h4>M3: OCR 文字识别（1 小时）</h4>
+  <p><strong>目标：</strong>用 RapidOCR 对 PNG 做 OCR，补充 python-pptx 漏掉的文字</p>
+  <p><strong>核心函数：</strong><code>_get_ocr_engine()</code> + <code>_ocr_slide_image()</code></p>
+  <p><strong>验证：</strong>之前 bullet 为空的公式页，现在有 OCR 识别出的文字</p>
+</div>
+
+<div class="milestone">
+  <h4>M4: 公式识别 + LaTeX 转中文（1.5 小时）</h4>
+  <p><strong>目标：</strong>pix2tex 识别公式为 LaTeX，再转中文口播读法</p>
+  <p><strong>核心函数：</strong><code>_get_pix2tex()</code> + <code>latex_to_chinese()</code> + <code>math_symbols_to_chinese()</code></p>
+  <p><strong>验证：</strong><code>\int_a^b f(x)dx</code> → "从 a 到 b 的积分 f(x) 微元 d x"</p>
+  <p><strong>关键坑：</strong>MathType 私有 Unicode 字符映射（\uf03d→=, \uf0b3→≥, \uf02d→-）</p>
+</div>
+
+<div class="milestone">
+  <h4>M5: 碎片清理 + 去重（1 小时）</h4>
+  <p><strong>目标：</strong>清理 python-pptx 提取的公式碎片，避免文案中出现"T1"、"∫"、"2 1"等无意义文本</p>
+  <p><strong>策略：</strong>不含中文 → 疑似碎片 → 多级清理（单字符/短碎片/字符重合判断）</p>
+  <p><strong>验证：</strong>bullets 从 20 条碎片降至 5 条干净文本</p>
+</div>
+
+<div class="milestone">
+  <h4>M6: TTS 语音合成（30 分钟）</h4>
+  <p><strong>目标：</strong>用 edge-tts 把口播文案合成语音 MP3</p>
+  <p><strong>验证：</strong>每页生成对应的 <code>scene_000.mp3</code>，可播放</p>
+</div>
+
+<div class="milestone">
+  <h4>M7: FFmpeg 视频合成（1 小时）</h4>
+  <p><strong>目标：</strong>把 PPT 图片 + 数字人头像 + 语音合成 MP4</p>
+  <p><strong>核心：</strong><code>render_scene_video()</code> — 左右分栏布局，避免遮挡</p>
+  <p><strong>验证：</strong>每页生成 <code>scene_000.mp4</code>，可播放</p>
+</div>
+
+<div class="milestone">
+  <h4>M8: 任务队列 + API（1 小时）</h4>
+  <p><strong>目标：</strong>Flask API + ThreadPoolExecutor + jobs.json 持久化</p>
+  <p><strong>验证：</strong>通过前端上传 PPT → 自动生成视频 → 下载</p>
+</div>
+
+<!-- ============ 11. 实战避坑 ============ -->
+<h2 id="lessons">11. 实战避坑经验</h2>
+
+<div class="grid">
+  <div class="card">
+    <h4>🐛 MathType 私有 Unicode</h4>
+    <p>python-pptx 提取的 <code>=</code> 是 <code>\uf03d</code>，<code>≥</code> 是 <code>\uf0b3</code>。没有映射表的话，这些符号在 TTS 里会静音或被读成乱码。</p>
+  </div>
+  <div class="card">
+    <h4>🐛 pix2tex 把 v 识别为 ν</h4>
+    <p>微积分教材中速度 <code>v</code> 被 pix2tex 识别成希腊字母 <code>\nu</code>（纽）。需要手动修正：<code>latex.replace(r"\nu", "v")</code>。</p>
+  </div>
+  <div class="card">
+    <h4>🐛 PaddleOCR 版本地狱</h4>
+    <p>PaddleOCR 3.x 强制下载 UVDoc 模型，2.x 与 paddlepaddle 3.x 不兼容，numpy 2.x 与 paddlex 冲突。最终弃用 paddle，改用 RapidOCR。</p>
+  </div>
+  <div class="card">
+    <h4>🐛 去重坐标抖动</h4>
+    <p>RapidOCR 返回的重复项 y 坐标有 1-2px 差异，导致 <code>round(y/10)</code> 量化桶失效。改用 <code>int(y // 20)</code> 20px 桶。</p>
+  </div>
+  <div class="card">
+    <h4>🐛 Pillow 覆盖高清图</h4>
+    <p>pywin32 未安装时，Pillow 简化渲染会覆盖 PowerPoint COM 生成的高清 PNG，公式全丢。必须在回退链中保护上层输出。</p>
+  </div>
+  <div class="card">
+    <h4>🐛 ffmpeg 必须用完整版</h4>
+    <p>系统精简版 ffmpeg 缺少 lavfi/aac 编码器，必须用 <code>imageio-ffmpeg</code> 提供的完整静态二进制（31MB，含 ffmpeg-win-x86_64-v7.1.exe）。</p>
+  </div>
+</div>
+
+<!-- ============ 12. 扩展方向 ============ -->
+<h2 id="extensions">12. 扩展学习方向</h2>
+
+<table>
+  <tr><th>方向</th><th>难度</th><th>涉及技术</th></tr>
+  <tr>
+    <td>接入 LLM 生成讲解稿</td>
+    <td>⭐⭐</td>
+    <td>OpenAI API / 豆包 / 通义千问，替换 <code>generate_script()</code></td>
+  </tr>
+  <tr>
+    <td>SadTalker 真实数字人</td>
+    <td>⭐⭐⭐</td>
+    <td>PyTorch, 3D Morphable Model, 音频驱动面部动画</td>
+  </tr>
+  <tr>
+    <td>SRT 字幕烧录</td>
+    <td>⭐⭐</td>
+    <td>FFmpeg drawtext / subtitles 滤镜，时间轴对齐</td>
+  </tr>
+  <tr>
+    <td>多语言支持</td>
+    <td>⭐⭐</td>
+    <td>edge-tts 多语言音色，latex_to_chinese 多语言版本</td>
+  </tr>
+  <tr>
+    <td>WebSocket 实时进度</td>
+    <td>⭐⭐</td>
+    <td>Flask-SocketIO 替换轮询，实时推送渲染进度</td>
+  </tr>
+  <tr>
+    <td>Docker 部署</td>
+    <td>⭐⭐⭐</td>
+    <td>无头 Linux 环境，LibreOffice 替代 COM，GPU 加速 OCR</td>
+  </tr>
+</table>
+
+<hr style="border-color: var(--border); margin: 3rem 0 1rem;">
+
+<p style="text-align: center; color: var(--text2); font-size: 0.82rem;">
+  最后更新：2026-07-01 | 基于 <a href="https://github.com/practical-tutorials/project-based-learning" style="color: var(--accent);">project-based-learning</a> 方法论
+</p>
+
+</body>
+</html>
