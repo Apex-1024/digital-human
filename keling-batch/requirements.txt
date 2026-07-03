@@ -7,6 +7,6 @@ pypdfium2==4.30.0
 Pillow==10.4.0
 Werkzeug==3.0.4
 imageio-ffmpeg==0.6.0
-# 文字+公式一体化识别（替代 RapidOCR + pix2tex 双引擎方案）
-pix2text>=0.2
+# PDF 文字+公式识别（MinerU pipeline 后端，含 MFR 公式识别模型）
+mineru[core]>=3.4
 pywin32>=306

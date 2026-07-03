@@ -14,15 +14,8 @@ from dataclasses import dataclass, field, asdict
 from typing import List, Optional, Dict, Any
 from concurrent.futures import ThreadPoolExecutor
 
-# 重定向模型/配置目录到项目内，避免沙箱权限问题
-_MODEL_ROOT = str(Path(__file__).resolve().parent.parent / ".p2t_models")
-os.environ.setdefault("PIX2TEXT_HOME", _MODEL_ROOT)
-os.environ.setdefault("CNSTD_HOME", _MODEL_ROOT)
-os.environ.setdefault("CNOCR_HOME", _MODEL_ROOT)
-os.environ.setdefault("YOLO_CONFIG_DIR", _MODEL_ROOT)
-os.environ.setdefault("ULTRALYTICS_CONFIG_DIR", _MODEL_ROOT)
-os.environ.setdefault("HF_HOME", _MODEL_ROOT)
-os.environ.setdefault("XDG_CACHE_HOME", _MODEL_ROOT)
+# MinerU 模型源：用 modelscope 避免代理问题
+os.environ.setdefault("MINERU_MODEL_SOURCE", "modelscope")
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 UPLOAD_DIR = BASE_DIR / "uploads"
@@ -60,72 +53,227 @@ _p2t_engine = None
 
 
 def _get_p2t():
-    """懒加载 Pix2Text 引擎（文字+公式一体化识别）"""
+    """懒加载 MinerU 引擎（PDF 解析，含公式识别）。
+
+    MinerU 3.4 是异步 API 模式：本地无 api_url 时会自动启动临时 FastAPI 服务。
+    这里不预创建服务，只确认 mineru 包可导入。真正调用在 _ocr_pdf_with_mineru。
+    """
     global _p2t_engine
     if _p2t_engine is not None:
         return _p2t_engine
     if _p2t_engine is False:
         return None
     try:
-        from pix2text import Pix2Text
-        _p2t_engine = Pix2Text()
-        log.info("Pix2Text 初始化成功")
+        import mineru  # noqa: F401
+        _p2t_engine = True
+        log.info("MinerU 包可用")
     except Exception as e:
-        log.warning(f"Pix2Text 初始化失败：{e}")
+        log.warning(f"MinerU 包不可用：{e}")
         _p2t_engine = False
     return _p2t_engine
 
 
-def _ocr_slide_image(image_path: str) -> List[tuple]:
-    """用 Pix2Text 识别整页 PPT 渲染图，返回 [(text, kind, y), ...]，按 y 升序
+def _ocr_pdf_with_mineru(pdf_path: str) -> List[List[tuple]]:
+    """用 MinerU 解析整本 PDF，按页返回 [(text, kind, y), ...]。
 
-    pix2text 输出 Markdown 格式，公式用 $...$ 包裹。
-    按行拆分，含 $ 的行标记为 formula，其余为 text。
-    y 坐标按行号递增（pix2text 不返回精确 y 坐标）。
+    - text/kind: 'text' 或 'formula'
+    - y: block 的 bbox 顶部坐标（用于排序），来自 MinerU JSON 的 bbox[1]
+    - 输出按 page_idx 拆分，result[i] 对应第 i 页
     """
-    result: List[tuple] = []
-    p2t = _get_p2t()
-    if not p2t:
-        return result
+    if not _get_p2t():
+        return []
+
+    import asyncio
+    import httpx
+    import tempfile
+    from mineru.cli import api_client as _api_client
+
+    pdf_path = Path(pdf_path)
+    output_dir = pdf_path.parent / f"_mineru_{pdf_path.stem}"
+    output_dir.mkdir(exist_ok=True)
+
+    form_data = _api_client.build_parse_request_form_data(
+        lang_list=["ch"],
+        backend="pipeline",
+        parse_method="auto",
+        formula_enable=True,
+        table_enable=False,
+        image_analysis=False,
+        server_url=None,
+        start_page_id=0,
+        end_page_id=None,
+        return_md=False,            # 不需要 md，只要中间 json
+        return_middle_json=True,
+        return_model_output=False,
+        return_content_list=False,
+        return_images=False,
+        response_format_zip=True,
+        return_original_file=False,
+    )
+    upload = [_api_client.UploadAsset(path=str(pdf_path), upload_name=pdf_path.name)]
+
+    async def _run():
+        async with httpx.AsyncClient(
+            timeout=_api_client.build_http_timeout(),
+            follow_redirects=True,
+        ) as http:
+            local_server = _api_client.LocalAPIServer()
+            base_url = local_server.start()
+            try:
+                health = await _api_client.wait_for_local_api_ready(http, local_server)
+                submit = await _api_client.submit_parse_task(
+                    base_url=health.base_url,
+                    upload_assets=upload,
+                    form_data=form_data,
+                )
+                await _api_client.wait_for_task_result(
+                    client=http,
+                    submit_response=submit,
+                    task_label=pdf_path.name,
+                    status_snapshot_callback=lambda s: None,
+                )
+                zip_path = await _api_client.download_result_zip(
+                    client=http,
+                    submit_response=submit,
+                    task_label=pdf_path.name,
+                )
+                try:
+                    _api_client.safe_extract_zip(zip_path, output_dir)
+                finally:
+                    zip_path.unlink(missing_ok=True)
+            finally:
+                local_server.stop()
 
     try:
-        from PIL import Image
-        img = Image.open(image_path).convert("RGB")
-        img_h = img.height
+        asyncio.run(_run())
     except Exception as e:
-        log.warning(f"打开图片失败 {image_path}：{e}")
-        return result
+        log.warning(f"MinerU 解析失败 {pdf_path}：{e}")
+        return []
+
+    # 找到 middle_json
+    json_path = None
+    for cand in output_dir.rglob("*_middle.json"):
+        json_path = cand
+        break
+    if not json_path:
+        log.warning(f"MinerU 未输出 middle.json：{output_dir}")
+        return []
+
+    import json
+    try:
+        data = json.loads(json_path.read_text(encoding="utf-8"))
+    except Exception as e:
+        log.warning(f"MinerU JSON 解析失败：{e}")
+        return []
+
+    pdf_info = data.get("pdf_info", [])
+    pages: List[List[tuple]] = []
+
+    def _extract_spans(blocks: List[dict]) -> List[tuple]:
+        items: List[tuple] = []
+        for b in blocks:
+            btype = b.get("type", "")
+            # 跳过图片、表格等非文本块
+            if btype in ("image", "image_body", "table", "table_body"):
+                continue
+            bbox = b.get("bbox", [0, 0, 0, 0])
+            y_top = bbox[1] if len(bbox) >= 4 else 0
+            lines = b.get("lines", [])
+            if not lines:
+                # 有些 block 直接有 content
+                content = b.get("content", "").strip()
+                if content:
+                    items.append((content, "text", y_top))
+                continue
+            for line in lines:
+                for span in line.get("spans", []):
+                    stype = span.get("type", "text")
+                    content = span.get("content", "").strip()
+                    if not content:
+                        continue
+                    if stype == "inline_equation":
+                        items.append((content, "formula", y_top))
+                    elif stype == "text":
+                        items.append((content, "text", y_top))
+                    # 其他类型（如 display_formula）也按公式处理
+                    elif "equation" in stype or "formula" in stype:
+                        items.append((content, "formula", y_top))
+        # 按 y 排序
+        items.sort(key=lambda x: x[2])
+        return items
+
+    # 按 page_idx 排序，保证页序正确
+    pdf_info_sorted = sorted(pdf_info, key=lambda p: p.get("page_idx", 0))
+    for page in pdf_info_sorted:
+        blocks = page.get("para_blocks") or page.get("preproc_blocks") or []
+        pages.append(_extract_spans(blocks))
+
+    return pages
+
+
+# ============ LLM 口播转换（DeepSeek）============
+_LLM_CACHE: Dict[str, str] = {}
+
+
+def latex_to_chinese_llm(latex: str) -> str:
+    """用 DeepSeek 把 LaTeX 公式转成中文口播读法，失败回退到正则方案"""
+    if not latex:
+        return ""
+    s = latex.strip().strip("$").strip()
+    if not s:
+        return ""
+
+    # 命中缓存直接返回
+    if s in _LLM_CACHE:
+        return _LLM_CACHE[s]
+
+    api_key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
+    if not api_key:
+        # 未配置 key，直接走正则回退
+        return latex_to_chinese(latex)
 
     try:
-        md_result = p2t.recognize(image_path)
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com/v1", timeout=15)
+        resp = client.chat.completions.create(
+            model="deepseek-chat",
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "你是数学公式口播转换器。输入 LaTeX 公式，输出自然的中文口播读法。"
+                        "规则：1) 只输出中文口播文本，不加任何解释或前后缀；"
+                        "2) 积分 ∫_a^b 读作'从 a 到 b 的积分'；"
+                        "3) 求和 Σ_{i=1}^{n} 读作'i 从 1 到 n 求和'；"
+                        "4) 分数 \\frac{a}{b} 读作'b 分之 a'；"
+                        "5) 根号 \\sqrt{x} 读作'根号下 x'；"
+                        "6) 上标 a^{2} 读作'a 的 2 次方'；"
+                        "7) 单字符下标 T_{1} 直接读作'T1'（拼接，不读'下标'）；"
+                        "8) 多字符下标 T_{ij} 读作'T 下标 ij'；"
+                        "9) 区间 [a, b] 读作'区间 a 到 b'；"
+                        "10) 希腊字母用中文名（α→阿尔法，β→贝塔等）；"
+                        "11) \\geq 读'大于等于'，\\leq 读'小于等于'，\\neq 读'不等于'；"
+                        "12) \\cdot 读'乘'，\\times 读'乘以'，\\div 读'除以'；"
+                        "13) \\to 读'趋近于'，\\rightarrow 读'趋向'；"
+                        "14) \\infty 读'无穷'，\\partial 读'偏导'；"
+                        "15) 保留变量字母原文（如 v(t) 读'v t'，不翻译成中文）；"
+                        "16) 去掉所有 LaTeX 命令（\\left \\right \\! \\, 等），只保留口播内容。"
+                    ),
+                },
+                {"role": "user", "content": s},
+            ],
+            temperature=0.0,
+            max_tokens=256,
+        )
+        result = resp.choices[0].message.content.strip()
+        if result:
+            _LLM_CACHE[s] = result
+            return result
     except Exception as e:
-        log.warning(f"Pix2Text 识别失败 {image_path}：{e}")
-        return result
+        log.warning(f"DeepSeek LLM 转换失败，回退正则：{e}")
 
-    if not md_result:
-        return result
-
-    lines = str(md_result).split("\n")
-    for i, line in enumerate(lines):
-        line = line.strip()
-        if not line:
-            continue
-        y = i * (img_h // max(len(lines), 1))
-        if "$" in line:
-            formulas = re.findall(r"\$\$(.*?)\$\$|\$(.*?)\$", line)
-            if formulas:
-                for block in formulas:
-                    latex = block[0] or block[1]
-                    latex = latex.strip()
-                    if latex:
-                        result.append((latex, "formula", y))
-            else:
-                result.append((line.replace("$", "").strip(), "text", y))
-        else:
-            result.append((line, "text", y))
-
-    result.sort(key=lambda x: x[2])
-    return result
+    # 回退到正则方案
+    return latex_to_chinese(latex)
 
 
 def latex_to_chinese(latex: str) -> str:
@@ -135,6 +283,10 @@ def latex_to_chinese(latex: str) -> str:
     s = latex.strip().strip("$").strip()
 
     # 希腊字母
+    # 规范化：MinerU 输出 LaTeX 时在符号间插入大量空格（如 "T _ { 1 }"）
+    # 去除 \ _ ^ { } , 周围的空格，使正则能稳定匹配
+    s = re.sub(r"\s*([\\_^{},])\s*", r"\1", s)
+
     greek = {
         r"\alpha": "阿尔法", r"\beta": "贝塔", r"\gamma": "伽马",
         r"\delta": "德尔塔", r"\epsilon": "艾普西隆", r"\varepsilon": "艾普西隆",
@@ -158,9 +310,12 @@ def latex_to_chinese(latex: str) -> str:
     s = s.replace(r"\lim", "极限 ")
     s = s.replace(r"\to", " 趋近于 ")
 
-    # 积分：\int_a^b 或 \int_{a}^{b} → 从 a 到 b 积分
-    # 注意：下标/上标内容里不能再吃掉 ^ 和 _（否则 _a^b 会把 a^b 当成下标）
-    m = re.search(r"\\int(?:_\{?([^{_}^]+)\}?)?(?:\^\{?([^{_}^]+)\}?)?", s)
+    # 预处理：单字符下标拍平（如 T_{1} → T1），消除嵌套大括号
+    # 这样积分/求和的正则能正确匹配 _{T1}^{T2}（否则 _{T_{1}} 嵌套匹配失败）
+    s = re.sub(r"_\{([0-9A-Za-z])\}", r"\1", s)
+
+    # 积分：\int_{a}^{b} → 从 a 到 b 的积分（预处理后嵌套大括号已拍平）
+    m = re.search(r"\\int(?:_\{([^{}]+)\})?(?:\^\{([^{}]+)\})?", s)
     if m:
         lo, hi = m.group(1), m.group(2)
         repl = "积分"
@@ -236,7 +391,8 @@ def latex_to_chinese(latex: str) -> str:
         r"\|": " 平行 ", r"\perp": " 垂直 ",
     }
     for k, v in rel.items():
-        s = s.replace(k, v)
+        # 加 (?![a-zA-Z]) 防止 \le 匹配到 \left、\in 匹配到 \infty 等
+        s = re.sub(re.escape(k) + r"(?![a-zA-Z])", v, s)
 
     # 算符
     s = s.replace(r"\log", " 对数 ").replace(r"\ln", " 自然对数 ")
@@ -245,22 +401,37 @@ def latex_to_chinese(latex: str) -> str:
     s = s.replace(r"\exp", " 指数 ").replace(r"\max", " 最大值 ")
     s = s.replace(r"\min", " 最小值 ").replace(r"\det", " 行列式 ")
 
-    # 字体修饰去掉
-    s = re.sub(r"\\mathrm\{([^{}]*)\}", r"\1", s)
-    s = re.sub(r"\\mathbb\{([^{}]*)\}", r"\1", s)
-    s = re.sub(r"\\mathbf\{([^{}]*)\}", r"\1", s)
-    s = re.sub(r"\\text\{([^{}]*)\}", r"\1", s)
-    s = re.sub(r"\\left|", " ", s)
-    s = re.sub(r"\\right|", " ", s)
+    # 字体修饰去掉（取内容），两轮以支持 \overline{{S}} 这种嵌套大括号
+    for cmd in (r"\mathrm", r"\mathbb", r"\mathbf", r"\mathit",
+                r"\boldsymbol", r"\overline", r"\bar", r"\vec",
+                r"\text", r"\mathcal", r"\mathsf"):
+        s = re.sub(re.escape(cmd) + r"\{([^{}]*)\}", r"\1", s)
+    # 拍平单层大括号（消除 \overline{{S}} 的内层大括号）
+    s = re.sub(r"\{([^{}]+)\}", r"\1", s)
+    # 第二轮字体修饰（处理拍平后暴露的命令）
+    for cmd in (r"\mathrm", r"\mathbb", r"\mathbf", r"\mathit",
+                r"\boldsymbol", r"\overline", r"\bar", r"\vec",
+                r"\text", r"\mathcal", r"\mathsf"):
+        s = re.sub(re.escape(cmd) + r"\{([^{}]*)\}", r"\1", s)
+
+    # 区间：\left[ a , b \right] → 区间 a 到 b
+    m = re.search(r"\\left\[\s*([^,]+?)\s*,\s*([^,]+?)\s*\\right\]", s)
+    if m:
+        s = s.replace(m.group(0), f" 区间 {m.group(1).strip()} 到 {m.group(2).strip()} ", 1)
+
+    # 括号：\left( \right) → ( )；其他 \left \right 配对简化
+    s = s.replace(r"\left(", "(").replace(r"\right)", ")")
+    s = s.replace(r"\left[", "[").replace(r"\right]", "]")
+    s = s.replace(r"\left|", "|").replace(r"\right|", "|")
+    s = s.replace(r"\left\{", "{").replace(r"\right\}", "}")
     s = s.replace(r"\left", " ").replace(r"\right", " ")
     s = s.replace(r"\big", " ").replace(r"\Big", " ")
-    s = s.replace(r"\,", " ").replace(r"\;", " ").replace(r"\:", " ")
-    s = s.replace(r"\!", "")
-    # \stackrel{a}{b} → b 上方 a（简化处理）
+
+    # 间距符
+    s = s.replace(r"\!", "").replace(r"\,", " ").replace(r"\;", " ").replace(r"\:", " ")
+    # \stackrel{a}{b} → b 上方 a
     s = re.sub(r"\\stackrel\{([^{}]*)\}\{([^{}]*)\}", r" \2 上方 \1 ", s)
-    # \mathrm{...} \mathbb{...} 等字体修饰去掉（在后面统一处理）
     s = s.replace(r"\quad", " ").replace(r"\qquad", " ")
-    s = s.replace(r"\,", " ")
 
     # 残留反斜杠命令直接丢掉
     s = re.sub(r"\\[a-zA-Z]+", " ", s)
@@ -502,22 +673,30 @@ store = JobStore()
 
 # ============ 1. PPT 解析 ============
 def parse_pptx(pptx_path: str) -> List[Scene]:
-    """解析 PPT 每页幻灯片：python-pptx 取标题，Pix2Text 取正文+公式"""
+    """解析 PPT 每页幻灯片：python-pptx 取标题，MinerU 解析 PDF 取正文+公式"""
     try:
         from pptx import Presentation
     except ImportError:
         raise RuntimeError("缺少 python-pptx，请先运行 pip install python-pptx")
 
     prs = Presentation(pptx_path)
-    scenes: List[Scene] = []
-
     pptx_path = Path(pptx_path)
+
+    # 1) PPT → PDF（PowerPoint COM 或 LibreOffice）
+    pdf_path = _convert_pptx_to_pdf(pptx_path)
+    if not pdf_path:
+        raise RuntimeError("PPT 转 PDF 失败，无法解析")
+
+    # 2) MinerU 解析整个 PDF，按页返回 [(text, kind, y), ...]
+    pages_ocr = _ocr_pdf_with_mineru(str(pdf_path))
+
+    # 3) 仍需每页 PNG（用于视频片段渲染）
     slide_imgs_dir = pptx_path.parent / f"_slides_{pptx_path.stem}"
     slide_imgs_dir.mkdir(exist_ok=True)
-    _convert_pptx_to_images(pptx_path, slide_imgs_dir)
-
+    _pdf_to_images(pdf_path, slide_imgs_dir)
     img_files = sorted(slide_imgs_dir.glob("slide_*.png"))
 
+    scenes: List[Scene] = []
     for idx, slide in enumerate(prs.slides):
         title = ""
         for shape in slide.shapes:
@@ -534,23 +713,20 @@ def parse_pptx(pptx_path: str) -> List[Scene]:
         img_path = str(img_files[idx]) if idx < len(img_files) else None
         bullets: List[str] = []
 
-        if img_path and Path(img_path).exists():
-            try:
-                ocr_items = _ocr_slide_image(img_path)
-                seen_norm = set()
-                if title:
-                    seen_norm.add(title.replace(" ", ""))
-                for text, kind, _y in ocr_items:
-                    norm = text.replace(" ", "")
-                    if norm in seen_norm:
-                        continue
-                    if kind == "formula":
-                        bullets.append(f"@@FORMULA@@{text}")
-                    else:
-                        bullets.append(text)
-                    seen_norm.add(norm)
-            except Exception as e:
-                log.warning(f"第 {idx + 1} 页 OCR 失败：{e}")
+        # 取该页的 OCR 结果
+        ocr_items = pages_ocr[idx] if idx < len(pages_ocr) else []
+        seen_norm = set()
+        if title:
+            seen_norm.add(title.replace(" ", ""))
+        for text, kind, _y in ocr_items:
+            norm = text.replace(" ", "")
+            if norm in seen_norm:
+                continue
+            if kind == "formula":
+                bullets.append(f"@@FORMULA@@{text}")
+            else:
+                bullets.append(text)
+            seen_norm.add(norm)
 
         if not title:
             title = f"第 {idx + 1} 页"
@@ -663,9 +839,9 @@ def _soffice_to_pdf(pptx_path: Path, pdf_path: Path, timeout: int = 180) -> bool
     return False
 
 
-def _convert_pptx_to_images(pptx_path: Path, out_dir: Path):
-    """PPT 每页转 PNG：PowerPoint COM → LibreOffice，均失败则抛异常"""
-    pdf_path = out_dir.parent / (pptx_path.stem + ".pdf")
+def _convert_pptx_to_pdf(pptx_path: Path) -> Optional[Path]:
+    """PPT → PDF：PowerPoint COM → LibreOffice，返回 PDF 路径，失败返回 None"""
+    pdf_path = pptx_path.parent / (pptx_path.stem + ".pdf")
 
     try:
         subprocess.run(["taskkill", "/F", "/IM", "soffice.exe"],
@@ -676,20 +852,13 @@ def _convert_pptx_to_images(pptx_path: Path, out_dir: Path):
         pass
 
     if _ppt_com_to_pdf(pptx_path, pdf_path):
-        _pdf_to_images(pdf_path, out_dir)
-        if any(out_dir.glob("slide_*.png")):
-            return
+        return pdf_path
 
     if _soffice_to_pdf(pptx_path, pdf_path, timeout=180):
         time.sleep(1)
-        _pdf_to_images(pdf_path, out_dir)
-        if any(out_dir.glob("slide_*.png")):
-            return
+        return pdf_path
 
-    raise RuntimeError(
-        "PPT 转图片失败：PowerPoint COM 和 LibreOffice 均不可用。"
-        "请安装 Microsoft Office 或 LibreOffice。"
-    )
+    return None
 
 
 def _pdf_to_images(pdf_path: Path, out_dir: Path):
@@ -727,7 +896,7 @@ def generate_script(scene: Scene) -> str:
         if b.startswith("@@FORMULA@@"):
             latex = b[len("@@FORMULA@@"):]
             latex_fixed = latex.replace(r"\nu", "v")
-            spoken = latex_to_chinese(latex_fixed)
+            spoken = latex_to_chinese_llm(latex_fixed)
             spoken = math_symbols_to_chinese(spoken)
             if spoken:
                 parts.append(spoken + "。")

@@ -1,0 +1,25 @@
+解析: C:\Users\sun\Desktop\yuantu-test\digital-human\keling-batch\uploads\test_clean.pptx
+============================================================
+
+第 1 页 | 标题: （一）问题的提出
+  图片: C:\Users\sun\Desktop\yuantu-test\digital-human\keling-batch\uploads\_slides_test_clean\slide_0.png
+  bullets (13 条):
+    [0] 问题：变速直线运动中位置函数与速度函数的联系
+    [1] 设某物体作直线运动，速度是
+    [2] @@FORMULA@@\nu = \nu ( t )
+    [3] ，且
+    [4] @@FORMULA@@\nu ( t ) \geq 0
+    [5] ，在时间段
+    [6] @@FORMULA@@[ T _ { 1 } , T _ { 2 } ]
+    [7] 内：
+    [8] 运动路程为：
+    [9] @@FORMULA@@\int _ { T _ { 1 } } ^ { T _ { 2 } } \nu ( t ) d t
+    [10] 又设位置函数为s(t)，则路程为：
+    [11] @@FORMULA@@s ( T _ { 2 } ) - s ( T _ { 1 } )
+    [12] @@FORMULA@@\therefore \int _ { T _ { 1 } } ^ { T _ { 2 } } \nu ( t ) d t = s ( T _ { 2 } ) - s ( T _ { 1 } ) .
+
+============================================================
+生成口播文案:
+
+第 1 页: （一）问题的提出。 问题：变速直线运动中位置函数与速度函数的联系。 设某物体作直线运动，速度是。 v 等于 v ( t )。 ，且。 v ( t ) 大于等于 0。 ，在时间段。 T1 到 T2。 内：。 运动路程为：。 从 T1 到 T2 的积分v ( t ) d t。 又设位置函数为s(t)，则路程为：。 s ( T2) 减 s ( T1)。 从 T1 到 T2 的积分v ( t ) d t 等于 s ( T2) 减 s ( T1) .。
+

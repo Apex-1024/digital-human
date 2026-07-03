@@ -163,8 +163,16 @@ def download_job(job_id):
     job = store.get(job_id)
     if not job or not job.output_path:
         return jsonify({"error": "任务未完成或无输出"}), 404
-    return send_file(job.output_path, as_attachment=True,
-                     download_name=Path(job.output_path).name)
+    out_path = Path(job.output_path)
+    if not out_path.exists():
+        # 任务记录存在但输出文件已丢失，更新状态避免后续误访问
+        job.status = "failed"
+        job.error = "输出文件不存在（可能被清理）"
+        job.output_path = None
+        store.update(job)
+        return jsonify({"error": "输出文件不存在，任务可能已被清理"}), 410
+    return send_file(str(out_path), as_attachment=True,
+                     download_name=out_path.name)
 
 
 @app.route("/api/avatars/<avatar_id>/preview")
