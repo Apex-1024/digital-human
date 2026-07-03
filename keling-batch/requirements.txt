@@ -7,12 +7,6 @@ pypdfium2==4.30.0
 Pillow==10.4.0
 Werkzeug==3.0.4
 imageio-ffmpeg==0.6.0
-# OCR 识别 PPT 中的数学公式（MathType OLE 对象 python-pptx 读不到）
-# 优先 RapidOCR（onnxruntime 后端，无 paddle 兼容性问题）
-rapidocr-onnxruntime>=1.4.4
-onnxruntime>=1.16.0
-pix2tex>=0.1.1
-# 备选：paddleocr + paddlepaddle（仅在 RapidOCR 不可用时启用）
-# paddleocr>=2.8,<3
-# paddlepaddle>=2.6,<3
-
+# 文字+公式一体化识别（替代 RapidOCR + pix2tex 双引擎方案）
+pix2text>=0.2
+pywin32>=306

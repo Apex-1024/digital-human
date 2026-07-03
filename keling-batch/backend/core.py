@@ -14,6 +14,16 @@ from dataclasses import dataclass, field, asdict
 from typing import List, Optional, Dict, Any
 from concurrent.futures import ThreadPoolExecutor
 
+# 重定向模型/配置目录到项目内，避免沙箱权限问题
+_MODEL_ROOT = str(Path(__file__).resolve().parent.parent / ".p2t_models")
+os.environ.setdefault("PIX2TEXT_HOME", _MODEL_ROOT)
+os.environ.setdefault("CNSTD_HOME", _MODEL_ROOT)
+os.environ.setdefault("CNOCR_HOME", _MODEL_ROOT)
+os.environ.setdefault("YOLO_CONFIG_DIR", _MODEL_ROOT)
+os.environ.setdefault("ULTRALYTICS_CONFIG_DIR", _MODEL_ROOT)
+os.environ.setdefault("HF_HOME", _MODEL_ROOT)
+os.environ.setdefault("XDG_CACHE_HOME", _MODEL_ROOT)
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 UPLOAD_DIR = BASE_DIR / "uploads"
 OUTPUT_DIR = BASE_DIR / "output"
@@ -46,190 +56,73 @@ def _find_ffmpeg() -> str:
 
 FFMPEG_BIN = _find_ffmpeg()
 
-_ocr_engine = None
-_ocr_engine_kind = None
-_pix2tex_model = None
+_p2t_engine = None
 
 
-def _get_ocr_engine():
-    """懒加载 OCR 引擎：优先 RapidOCR，回退 PaddleOCR"""
-    global _ocr_engine, _ocr_engine_kind
-    if _ocr_engine is not None:
-        return _ocr_engine, _ocr_engine_kind
-    if _ocr_engine is False:
-        return None, None
-
-    try:
-        from rapidocr_onnxruntime import RapidOCR
-        _ocr_engine = RapidOCR()
-        _ocr_engine_kind = "rapid"
-        log.info("RapidOCR (onnxruntime) 初始化成功")
-        return _ocr_engine, _ocr_engine_kind
-    except Exception as e:
-        log.debug(f"RapidOCR 不可用：{e}")
-
-    try:
-        from paddleocr import PaddleOCR
-        last_err = None
-        candidates = (
-            {"lang": "ch", "use_doc_orientation_classify": False, "use_doc_unwarping": False},
-            {"lang": "ch", "use_angle_cls": True},
-            {"lang": "ch"},
-        )
-        for kwargs in candidates:
-            try:
-                _ocr_engine = PaddleOCR(**kwargs)
-                _ocr_engine_kind = "paddle"
-                log.info(f"PaddleOCR 初始化成功")
-                return _ocr_engine, _ocr_engine_kind
-            except Exception as e:
-                last_err = e
-                continue
-        log.warning(f"PaddleOCR 所有参数组合都失败：{last_err}")
-    except Exception as e:
-        log.warning(f"PaddleOCR 导入失败：{e}")
-
-    _ocr_engine = False
-    _ocr_engine_kind = None
-    return None, None
-
-
-def _get_pix2tex():
-    global _pix2tex_model
-    if _pix2tex_model is not None:
-        return _pix2tex_model
-    try:
-        from pix2tex.cli import LatexOCR
-        _pix2tex_model = LatexOCR()
-        log.info("pix2tex (LaTeXOCR) 初始化成功")
-    except Exception as e:
-        log.warning(f"pix2tex 初始化失败：{e}")
-        _pix2tex_model = False
-    return _pix2tex_model
-
-
-def _bbox_center(box):
-    ys = [p[1] for p in box]
-    return sum(ys) / len(ys)
-
-
-_MATH_HINT_CHARS = set("=±÷×∑∫√π∞αβγδθλμνΦφΩω≤≥≠≈→←↔∈∉∀∃∝·²³")
-
-
-def _looks_like_formula(text: str) -> bool:
-    if not text:
-        return False
-    if any(c in _MATH_HINT_CHARS for c in text):
-        return True
-    if "\\" in text or "^" in text or "_" in text:
-        return True
-    digits = sum(1 for c in text if c.isdigit())
-    if "=" in text and digits >= 1:
-        return True
-    return False
-
-
-def _crop_bbox(img, box):
-    xs = [int(p[0]) for p in box]
-    ys = [int(p[1]) for p in box]
-    pad = 4
-    left = max(0, min(xs) - pad)
-    upper = max(0, min(ys) - pad)
-    right = min(img.width, max(xs) + pad)
-    lower = min(img.height, max(ys) + pad)
-    if right - left < 4 or lower - upper < 4:
+def _get_p2t():
+    """懒加载 Pix2Text 引擎（文字+公式一体化识别）"""
+    global _p2t_engine
+    if _p2t_engine is not None:
+        return _p2t_engine
+    if _p2t_engine is False:
         return None
-    return img.crop((left, upper, right, lower))
+    try:
+        from pix2text import Pix2Text
+        _p2t_engine = Pix2Text()
+        log.info("Pix2Text 初始化成功")
+    except Exception as e:
+        log.warning(f"Pix2Text 初始化失败：{e}")
+        _p2t_engine = False
+    return _p2t_engine
 
 
 def _ocr_slide_image(image_path: str) -> List[tuple]:
-    """对单页 PPT 渲染图做 OCR，返回 [(text, kind, y), ...]，按 y 升序"""
+    """用 Pix2Text 识别整页 PPT 渲染图，返回 [(text, kind, y), ...]，按 y 升序
+
+    pix2text 输出 Markdown 格式，公式用 $...$ 包裹。
+    按行拆分，含 $ 的行标记为 formula，其余为 text。
+    y 坐标按行号递增（pix2text 不返回精确 y 坐标）。
+    """
     result: List[tuple] = []
-    ocr, kind = _get_ocr_engine()
-    if not ocr:
+    p2t = _get_p2t()
+    if not p2t:
         return result
 
     try:
         from PIL import Image
         img = Image.open(image_path).convert("RGB")
+        img_h = img.height
     except Exception as e:
         log.warning(f"打开图片失败 {image_path}：{e}")
         return result
 
-    flat = []
     try:
-        if kind == "rapid":
-            raw, _elapsed = ocr(image_path)
-            if raw:
-                for item in raw:
-                    box, text, conf = item[0], item[1], float(item[2])
-                    flat.append((box, text, conf))
-        elif kind == "paddle":
-            try:
-                paddle_raw = ocr.ocr(image_path, cls=True)
-            except TypeError:
-                paddle_raw = ocr.predict(image_path)
-            except Exception as e:
-                log.warning(f"PaddleOCR 调用失败：{e}")
-                paddle_raw = None
-            if paddle_raw:
-                pages = paddle_raw if isinstance(paddle_raw, list) else [paddle_raw]
-                for page in pages:
-                    if not page:
-                        continue
-                    if isinstance(page, dict) and "rec_texts" in page:
-                        texts = page.get("rec_texts", [])
-                        scores = page.get("rec_scores", [1.0] * len(texts))
-                        polys = page.get("rec_polys") or page.get("dt_polys", [])
-                        for t, s, b in zip(texts, scores, polys):
-                            flat.append((b, t, float(s) if s is not None else 0.0))
-                    elif isinstance(page, list):
-                        for item in page:
-                            try:
-                                box, (text, conf) = item
-                                flat.append((box, text, float(conf)))
-                            except (ValueError, TypeError):
-                                continue
+        md_result = p2t.recognize(image_path)
     except Exception as e:
-        log.warning(f"OCR 调用失败：{e}")
+        log.warning(f"Pix2Text 识别失败 {image_path}：{e}")
         return result
 
-    if not flat:
+    if not md_result:
         return result
 
-    deduped = []
-    seen_keys = set()
-    for box, text, conf in flat:
-        text_s = text.strip() if text else ""
-        if not text_s:
+    lines = str(md_result).split("\n")
+    for i, line in enumerate(lines):
+        line = line.strip()
+        if not line:
             continue
-        key = (text_s, int(_bbox_center(box) // 20))
-        if key in seen_keys:
-            continue
-        seen_keys.add(key)
-        deduped.append((box, text, conf))
-    flat = deduped
-
-    pix = _get_pix2tex()
-    for box, text, conf in flat:
-        if not text or not text.strip():
-            continue
-        if _looks_like_formula(text) or conf < 0.6:
-            if pix:
-                crop = _crop_bbox(img, box)
-                if crop:
-                    try:
-                        latex = pix(crop)
-                        if latex:
-                            latex = latex.strip()
-                            if latex and len(latex) <= 80 and latex.count("\\") <= 8:
-                                result.append((latex, "formula", _bbox_center(box)))
-                                continue
-                    except Exception as e:
-                        log.debug(f"pix2tex 识别失败：{e}")
-            result.append((text.strip(), "text", _bbox_center(box)))
+        y = i * (img_h // max(len(lines), 1))
+        if "$" in line:
+            formulas = re.findall(r"\$\$(.*?)\$\$|\$(.*?)\$", line)
+            if formulas:
+                for block in formulas:
+                    latex = block[0] or block[1]
+                    latex = latex.strip()
+                    if latex:
+                        result.append((latex, "formula", y))
+            else:
+                result.append((line.replace("$", "").strip(), "text", y))
         else:
-            result.append((text.strip(), "text", _bbox_center(box)))
+            result.append((line, "text", y))
 
     result.sort(key=lambda x: x[2])
     return result
@@ -609,7 +502,7 @@ store = JobStore()
 
 # ============ 1. PPT 解析 ============
 def parse_pptx(pptx_path: str) -> List[Scene]:
-    """解析 PPT 每页幻灯片，提取标题、要点，OCR 补充公式识别"""
+    """解析 PPT 每页幻灯片：python-pptx 取标题，Pix2Text 取正文+公式"""
     try:
         from pptx import Presentation
     except ImportError:
@@ -627,133 +520,35 @@ def parse_pptx(pptx_path: str) -> List[Scene]:
 
     for idx, slide in enumerate(prs.slides):
         title = ""
-        bullets: List[str] = []
-        seen_text: List[str] = []
-
         for shape in slide.shapes:
             if not shape.has_text_frame:
                 continue
             for para in shape.text_frame.paragraphs:
                 text = "".join(run.text for run in para.runs).strip()
-                if not text:
-                    continue
-                if not title:
+                if text:
                     title = text
-                else:
-                    bullets.append(text)
-                seen_text.append(text)
+                    break
+            if title:
+                break
 
         img_path = str(img_files[idx]) if idx < len(img_files) else None
+        bullets: List[str] = []
 
         if img_path and Path(img_path).exists():
             try:
                 ocr_items = _ocr_slide_image(img_path)
-                ocr_text_set = set()
+                seen_norm = set()
+                if title:
+                    seen_norm.add(title.replace(" ", ""))
                 for text, kind, _y in ocr_items:
-                    norm = text.replace(" ", "").replace(":", "：").replace("：", "")
-                    if norm:
-                        ocr_text_set.add(norm)
-                        if kind == "formula":
-                            import re as _re
-                            plain = _re.sub(r"\\[a-zA-Z]+", "", text)
-                            plain = plain.replace(" ", "").replace("{", "").replace("}", "")
-                            plain = plain.replace("^", "").replace("_", "")
-                            if plain and plain != norm:
-                                ocr_text_set.add(plain)
-
-                cleaned_bullets = []
-                for b in bullets:
-                    if b.startswith("@@FORMULA@@"):
-                        cleaned_bullets.append(b)
+                    norm = text.replace(" ", "")
+                    if norm in seen_norm:
                         continue
-                    b_norm = b.replace(" ", "").replace(":", "：").replace("：", "").replace(".", "").replace("．", "")
-                    has_cjk = any('\u4e00' <= ch <= '\u9fff' for ch in b)
-                    if has_cjk:
-                        cleaned_bullets.append(b)
-                        continue
-                    if not b_norm:
-                        continue
-                    b_chars_significant = set(b_norm) - set("()[]{}=+-*/<>.,;:!?，。；：")
-                    if len(b_chars_significant) <= 1 or len(b_norm) <= 2:
-                        continue
-                    covered = False
-                    for ocr_t in ocr_text_set:
-                        if not ocr_t:
-                            continue
-                        if b_norm in ocr_t and len(ocr_t) > len(b_norm):
-                            covered = True
-                            break
-                        ocr_chars = set(ocr_t) - set("()[]{}=+-*/<>.,;:!?，。；：")
-                        if b_chars_significant and b_chars_significant.issubset(ocr_chars) and len(ocr_t) > len(b_norm):
-                            covered = True
-                            break
-                    if covered:
-                        continue
-                    if len(b_norm) <= 6:
-                        continue
-                    if len(b_chars_significant) <= 10:
-                        covered2 = False
-                        for ocr_t in ocr_text_set:
-                            if not ocr_t:
-                                continue
-                            ocr_chars = set(ocr_t) - set("()[]{}=+-*/<>.,;:!?，。；：")
-                            overlap = b_chars_significant & ocr_chars
-                            if len(overlap) >= len(b_chars_significant) * 0.5 and len(ocr_t) > len(b_norm):
-                                covered2 = True
-                                break
-                        if covered2:
-                            continue
-                    cleaned_bullets.append(b)
-                bullets = cleaned_bullets
-
-                for text, kind, _y in ocr_items:
                     if kind == "formula":
                         bullets.append(f"@@FORMULA@@{text}")
                     else:
-                        def _norm_for_dedup(s):
-                            return s.replace(" ", "").replace(":", "：").replace("：", "") \
-                                    .replace(",", "，").replace("，", "") \
-                                    .replace(".", "。").replace("。", "") \
-                                    .replace("(", "(").replace(")", ")") \
-                                    .replace("（", "(").replace("）", ")") \
-                                    .replace("'", "'").replace("'", "'") \
-                                    .replace("'", "").replace("'", "")
-                        norm = _norm_for_dedup(text)
-
-                        similar_idx = None
-                        for si, s in enumerate(seen_text):
-                            if not s:
-                                continue
-                            s_norm = _norm_for_dedup(s)
-                            if norm and (norm in s_norm or s_norm in norm):
-                                similar_idx = si
-                                break
-                            if norm and s_norm and len(norm) >= 8 and len(s_norm) >= 8:
-                                set_a = set(norm)
-                                set_b = set(s_norm)
-                                overlap = set_a & set_b
-                                union = set_a | set_b
-                                if union and len(overlap) / len(union) >= 0.7:
-                                    similar_idx = si
-                                    break
-
-                        if similar_idx is not None:
-                            math_syms = set("=≥≤≠≈><+-×÷±∑∫√") | {
-                                "\uf03d", "\uf0b3", "\uf023", "\uf02d", "\uf022",
-                                "\uf0b4", "\uf03f", "\uf024", "\uf034", "\uf030",
-                            }
-                            ocr_math_count = sum(1 for c in text if c in math_syms)
-                            pptx_math_count = sum(1 for c in seen_text[similar_idx] if c in math_syms)
-                            if ocr_math_count > pptx_math_count:
-                                old_text = seen_text[similar_idx]
-                                for bi, bb in enumerate(bullets):
-                                    if bb == old_text:
-                                        bullets[bi] = text
-                                        break
-                                seen_text[similar_idx] = text
-                            continue
                         bullets.append(text)
-                        seen_text.append(text)
+                    seen_norm.add(norm)
             except Exception as e:
                 log.warning(f"第 {idx + 1} 页 OCR 失败：{e}")
 

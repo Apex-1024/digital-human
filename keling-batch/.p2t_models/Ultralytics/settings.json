@@ -1,0 +1,21 @@
+{
+  "settings_version": "0.0.6",
+  "datasets_dir": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\datasets",
+  "weights_dir": "weights",
+  "runs_dir": "runs",
+  "uuid": "3bc36648630721f6cb319f2a70cbdbb9260e94e26c5ebc2760a98562c52ceac9",
+  "sync": true,
+  "api_key": "",
+  "openai_api_key": "",
+  "clearml": true,
+  "comet": true,
+  "dvc": true,
+  "hub": true,
+  "mlflow": true,
+  "neptune": true,
+  "raytune": true,
+  "tensorboard": false,
+  "wandb": false,
+  "vscode_msg": true,
+  "openvino_msg": true
+}
