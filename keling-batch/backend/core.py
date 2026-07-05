@@ -65,12 +65,64 @@ def _get_p2t():
         return None
     try:
         import mineru  # noqa: F401
+        _patch_pdfium_image_get_pos()
         _p2t_engine = True
         log.info("MinerU 包可用")
     except Exception as e:
         log.warning(f"MinerU 包不可用：{e}")
         _p2t_engine = False
     return _p2t_engine
+
+
+def _patch_pdfium_image_get_pos():
+    """兼容补丁：pypdfium2 5.x 移除了 PdfImage.get_pos()，MinerU 3.4.1 仍依赖它。
+
+    pdf_classify.get_high_image_coverage_ratio_pdfium 调用 page_object.get_pos()
+    获取图像四元组 (left, bottom, right, top)。pypdfium2 5.x 改名为 get_bounds()，
+    返回格式完全一致。
+
+    本函数打主进程补丁；MinerU 子进程补丁通过 PYTHONPATH + usercustomize.py 注入
+    （见 _ensure_mineru_subprocess_patch）。
+    """
+    try:
+        import pypdfium2 as _pdfium
+        from pypdfium2._helpers.pageobjects import PdfImage
+        if not hasattr(PdfImage, "get_pos") and hasattr(PdfImage, "get_bounds"):
+            PdfImage.get_pos = lambda self: self.get_bounds()
+            log.info("已为 PdfImage.get_pos 打主进程兼容补丁（委托给 get_bounds）")
+    except Exception as e:
+        log.warning(f"PdfImage.get_pos 主进程补丁失败（忽略，将由 MinerU except 兜底）：{e}")
+
+
+# 标记子进程补丁是否已注入环境变量，避免重复设置
+_mineru_subprocess_patch_injected = False
+
+
+def _ensure_mineru_subprocess_patch():
+    """注入 PYTHONPATH 让 MinerU LocalAPIServer 子进程启动时执行补丁。
+
+    MinerU 的 LocalAPIServer.start() 用 subprocess.Popen 启动独立 Python 进程
+    跑 fast_api 模块，env=os.environ.copy() 继承主进程环境变量。主进程的
+    monkey-patch 不会传到子进程，但 PYTHONPATH 会。子进程启动时 site 模块会
+    自动 import PYTHONPATH 目录里的 usercustomize.py，从而打上补丁。
+    """
+    global _mineru_subprocess_patch_injected
+    if _mineru_subprocess_patch_injected:
+        return
+    patch_dir = str(Path(__file__).resolve().parent.parent / "_mineru_patch")
+    if not Path(patch_dir).is_dir():
+        log.warning(f"MinerU 子进程补丁目录不存在：{patch_dir}")
+        return
+    existing = os.environ.get("PYTHONPATH", "")
+    sep = ";" if os.name == "nt" else ":"
+    if patch_dir in existing.split(sep):
+        _mineru_subprocess_patch_injected = True
+        return
+    os.environ["PYTHONPATH"] = (
+        f"{patch_dir}{sep}{existing}" if existing else patch_dir
+    )
+    _mineru_subprocess_patch_injected = True
+    log.info(f"已注入 PYTHONPATH 供 MinerU 子进程加载补丁：{patch_dir}")
 
 
 def _ocr_pdf_with_mineru(pdf_path: str) -> List[List[tuple]]:
@@ -87,6 +139,9 @@ def _ocr_pdf_with_mineru(pdf_path: str) -> List[List[tuple]]:
     import httpx
     import tempfile
     from mineru.cli import api_client as _api_client
+
+    # 确保 MinerU 子进程启动时加载 PdfImage.get_pos 补丁
+    _ensure_mineru_subprocess_patch()
 
     pdf_path = Path(pdf_path)
     output_dir = pdf_path.parent / f"_mineru_{pdf_path.stem}"
@@ -614,6 +669,67 @@ class Job:
         return d
 
 
+def _cleanup_job_files(job: "Job") -> List[str]:
+    """清理任务相关的所有文件和目录。
+
+    从 job.pptx_path 和 job.output_path 推导所有产物路径并删除。
+    单个路径失败不影响其他路径，返回已清理路径列表供日志记录。
+
+    清理范围：
+    - uploads/{stem}.pptx              原始上传文件
+    - uploads/{stem}.pdf               PPT 转 PDF 产物
+    - uploads/_mineru_{stem}/          MinerU 解析结果目录
+    - uploads/_slides_{stem}/          PDF 转 PNG 切片目录
+    - output/{job_id}/                 输出工作目录（含 audio/ scenes/ final/ talking_head_*/）
+    """
+    import shutil
+    cleaned: List[str] = []
+
+    # 1) 从 pptx_path 推导 uploads/ 下所有产物
+    if job.pptx_path:
+        pptx = Path(job.pptx_path)
+        stem = pptx.stem  # 如 d62a9c89_test
+        uploads_dir = pptx.parent
+
+        upload_artifacts = [
+            pptx,                                  # 原始 PPTX
+            uploads_dir / f"{stem}.pdf",           # PPT 转 PDF
+            uploads_dir / f"_mineru_{stem}",       # MinerU 解析目录
+            uploads_dir / f"_slides_{stem}",       # PNG 切片目录
+        ]
+        for p in upload_artifacts:
+            try:
+                if p.is_dir():
+                    shutil.rmtree(p, ignore_errors=False)
+                    cleaned.append(str(p))
+                elif p.exists():
+                    p.unlink(missing_ok=False)
+                    cleaned.append(str(p))
+            except Exception as e:
+                log.warning(f"清理失败 {p}: {e}")
+
+    # 2) 从 output_path 推导 output/{job_id}/ 整个目录
+    if job.output_path:
+        out_file = Path(job.output_path)
+        # output_path = output/{job_id}/final/{stem}.mp4
+        # 工作目录 = output/{job_id}/
+        job_work_dir = out_file.parent.parent
+        if job_work_dir.exists() and job_work_dir.is_dir():
+            # 安全检查：必须是 OUTPUT_DIR 的直接子目录，避免误删
+            try:
+                if job_work_dir.parent == OUTPUT_DIR:
+                    shutil.rmtree(job_work_dir, ignore_errors=False)
+                    cleaned.append(str(job_work_dir))
+                else:
+                    log.warning(
+                        f"拒绝清理非 OUTPUT_DIR 子目录: {job_work_dir}"
+                    )
+            except Exception as e:
+                log.warning(f"清理失败 {job_work_dir}: {e}")
+
+    return cleaned
+
+
 class JobStore:
     """简单的 JSON 文件持久化的任务存储"""
     def __init__(self, path: Path = JOBS_FILE):
@@ -684,8 +800,12 @@ def parse_pptx(pptx_path: str) -> List[Scene]:
 
     # 1) PPT → PDF（PowerPoint COM 或 LibreOffice）
     pdf_path = _convert_pptx_to_pdf(pptx_path)
-    if not pdf_path:
-        raise RuntimeError("PPT 转 PDF 失败，无法解析")
+    if not pdf_path or not pdf_path.exists():
+        raise RuntimeError(
+            f"PPT 转 PDF 失败：PowerPoint COM 与 LibreOffice 均失败。"
+            f"pptx={pptx_path} exists={pptx_path.exists()} "
+            f"soffice未安装或COM被占用，详见日志 traceback。"
+        )
 
     # 2) MinerU 解析整个 PDF，按页返回 [(text, kind, y), ...]
     pages_ocr = _ocr_pdf_with_mineru(str(pdf_path))
@@ -763,7 +883,7 @@ def _ppt_com_to_pdf(pptx_path: Path, pdf_path: Path) -> bool:
             return True
         return False
     except Exception as e:
-        log.warning(f"PowerPoint COM 转换失败：{e}")
+        log.exception(f"PowerPoint COM 转换失败：{e}")
         return False
     finally:
         try:
@@ -835,7 +955,16 @@ def _soffice_to_pdf(pptx_path: Path, pdf_path: Path, timeout: int = 180) -> bool
     if pdf_path.exists() and pdf_path.stat().st_size > 0:
         log.info(f"LibreOffice: PDF 生成成功（{time.time()-start:.0f}s）")
         return True
-    log.warning(f"LibreOffice: 进程退出但无 PDF（exit={proc.returncode}）")
+    stdout, stderr = b"", b""
+    try:
+        stdout, stderr = proc.communicate(timeout=5)
+    except Exception:
+        pass
+    log.warning(
+        f"LibreOffice: 进程退出但无 PDF（exit={proc.returncode}）"
+        f" stdout={stdout.decode('utf-8', 'ignore')[:500]}"
+        f" stderr={stderr.decode('utf-8', 'ignore')[:500]}"
+    )
     return False
 
 

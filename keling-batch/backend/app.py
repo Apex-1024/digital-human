@@ -14,7 +14,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from core import (
     Job, store, submit_job, BASE_DIR, UPLOAD_DIR, OUTPUT_DIR, ASSETS_DIR,
-    AVATAR_DIR, BGM_DIR, JobStore
+    AVATAR_DIR, BGM_DIR, JobStore, _cleanup_job_files
 )
 
 log = logging.getLogger("keling-api")
@@ -147,15 +147,17 @@ def delete_job(job_id):
     job = store.get(job_id)
     if not job:
         return jsonify({"error": "任务不存在"}), 404
-    if job.output_path:
-        try:
-            for f in Path(job.output_path).parent.iterdir():
-                if f.is_file():
-                    f.unlink()
-        except Exception as e:
-            log.warning(f"清理输出失败：{e}")
+
+    # 运行中任务拒绝删除，避免文件被占用导致崩溃
+    if job.status in ("running", "pending"):
+        return jsonify({"error": f"任务正在 {job.status} 状态，无法删除"}), 409
+
+    # 先清理文件，再删除记录
+    cleaned = _cleanup_job_files(job)
+    if cleaned:
+        log.info(f"任务 {job_id} 已清理 {len(cleaned)} 个文件/目录: {cleaned}")
     store.delete(job_id)
-    return jsonify({"ok": True})
+    return jsonify({"ok": True, "cleaned": len(cleaned)})
 
 
 @app.route("/api/jobs/<job_id>/download")
