@@ -1,0 +1,37 @@
+# 默认忽略的文件
+/shelf/
+/workspace.xml
+understand-anything/    
+.understand-anything/   
+/.codegraph/
+/.claude/
+/.trae/
+/docs/
+# 基于编辑器的 HTTP 客户端请求
+/httpRequests/
+# 已忽略包含查询文件的默认文件夹
+/queries/
+# Datasource local storage ignored files
+/dataSources/
+/dataSources.local.xml
+
+# IDEs
+.idea/
+.vscode/
+.trae/
+.claude/
+
+# 缓存和文档
+docs/
+queries/
+dataSources/
+httpRequests/
+.codegraph/
+
+# 重点：你要忽略的文件夹
+/understand-anything/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
