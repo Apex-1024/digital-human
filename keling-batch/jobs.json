@@ -1,3 +1,49 @@
 {
-  "jobs": []
+  "jobs": [
+    {
+      "job_id": "621b29aa",
+      "filename": "61dfa34c_test.pptx",
+      "pptx_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\uploads\\61dfa34c_test.pptx",
+      "status": "done",
+      "progress": 1.0,
+      "stage": "完成",
+      "avatar": "teacher_female",
+      "voice": "zh-CN-XiaoxiaoNeural",
+      "ratio": "16:9",
+      "resolution": "720p",
+      "digital_human_mode": "static",
+      "enable_subtitle": true,
+      "enable_bgm": true,
+      "scenes": [
+        {
+          "index": 0,
+          "title": "（一）问题的提出",
+          "bullets": [
+            "问题：变速直线运动中位置函数与速度函数的联系.",
+            "设某物体作直线运动，速度是",
+            "@@FORMULA@@\\nu = \\nu ( t )",
+            "，且",
+            "@@FORMULA@@\\nu ( t ) \\geq 0",
+            "，在时间段",
+            "@@FORMULA@@[ T _ { 1 } , T _ { 2 } ]",
+            "内：",
+            "运动路程为：",
+            "@@FORMULA@@\\int _ { T _ { 1 } } ^ { T _ { 2 } } \\nu ( t ) d t",
+            "又设位置函数为s(t)，则路程为：",
+            "@@FORMULA@@s ( T _ { 2 } ) - s ( T _ { 1 } )",
+            "@@FORMULA@@\\therefore \\int _ { T _ { 1 } } ^ { T _ { 2 } } \\nu ( t ) d t = s ( T _ { 2 } ) - s ( T _ { 1 } ) ."
+          ],
+          "image_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\uploads\\_slides_61dfa34c_test\\slide_0.png",
+          "script": "（一）问题的提出。 问题：变速直线运动中位置函数与速度函数的联系。 设某物体作直线运动，速度是。 v 等于 v t。 ，且。 v t 大于等于 0。 ，在时间段。 区间 T1 到 T2。 内：。 运动路程为：。 从T1到T2的积分v t d t。 又设位置函数为s(t)，则路程为：。 s T2 减 s T1。 因此从T1到T2的积分v t d t等于s T2减s T1。",
+          "audio_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\output\\621b29aa\\audio\\scene_000.mp3",
+          "duration_sec": 37.22
+        }
+      ],
+      "output_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\output\\621b29aa\\final\\61dfa34c_test.mp4",
+      "error": null,
+      "created_at": 1783920691.1207197,
+      "started_at": 1783920691.1222315,
+      "finished_at": 1783920736.0843823
+    }
+  ]
 }
