@@ -1,13 +1,7 @@
 # 默认忽略的文件
 /shelf/
 /workspace.xml
-understand-anything/    
-.understand-anything/   
-/.codegraph/
-/.claude/
-/.trae/
-/.uploads/
-/docs/
+
 # 基于编辑器的 HTTP 客户端请求
 /httpRequests/
 # 已忽略包含查询文件的默认文件夹
@@ -27,10 +21,15 @@ docs/
 queries/
 dataSources/
 httpRequests/
-.codegraph/
+/keling-batch/output/
+/keling-batch/test_debug/
+/keling-batch/uploads/
+/jobs.json
 
 # 重点：你要忽略的文件夹
 /understand-anything/
+/.understand-anything/  
+/.codegraph/
 
 # Python
 .venv/

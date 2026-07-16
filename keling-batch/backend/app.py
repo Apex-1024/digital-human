@@ -14,7 +14,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from core import (
     Job, store, submit_job, BASE_DIR, UPLOAD_DIR, OUTPUT_DIR, ASSETS_DIR,
-    AVATAR_DIR, BGM_DIR, JobStore, _cleanup_job_files
+    AVATAR_DIR, BGM_DIR, JobStore, _cleanup_job_files, extract_lesson_plan
 )
 
 log = logging.getLogger("keling-api")
@@ -83,19 +83,49 @@ def upload_ppt():
     if not f.filename:
         return jsonify({"error": "文件名为空"}), 400
     ext = Path(f.filename).suffix.lower()
-    if ext not in ALLOWED_EXT:
-        return jsonify({"error": f"不支持的文件格式 {ext}，仅接受 {ALLOWED_EXT}"}), 400
+    purpose = request.form.get("purpose", "ppt")  # ppt | lesson_plan
+    if purpose == "lesson_plan":
+        allowed = {".txt", ".md", ".docx", ".doc"}
+        max_mb = 20
+    else:
+        allowed = ALLOWED_EXT
+        max_mb = MAX_SIZE_MB
+    if ext not in allowed:
+        return jsonify({"error": f"不支持的文件格式 {ext}，仅接受 {allowed}"}), 400
     f.seek(0, os.SEEK_END)
     size_mb = f.tell() / 1024 / 1024
     f.seek(0)
-    if size_mb > MAX_SIZE_MB:
-        return jsonify({"error": f"文件过大 {size_mb:.1f}MB > {MAX_SIZE_MB}MB"}), 400
+    if size_mb > max_mb:
+        return jsonify({"error": f"文件过大 {size_mb:.1f}MB > {max_mb}MB"}), 400
 
     safe_name = secure_filename(f.filename)
     save_path = UPLOAD_DIR / f"{uuid.uuid4().hex[:8]}_{safe_name}"
     f.save(save_path)
-    log.info(f"已上传：{save_path} ({size_mb:.2f}MB)")
+    log.info(f"已上传：{save_path} ({size_mb:.2f}MB, purpose={purpose})")
     return jsonify({"path": str(save_path), "filename": safe_name, "size_mb": round(size_mb, 2)})
+
+
+@app.route("/api/lesson_plan_preview", methods=["POST"])
+def lesson_plan_preview():
+    """教案预览：提取教案文本，返回前 500 字 + 总字数"""
+    data = request.get_json(force=True, silent=True) or {}
+    path = data.get("path", "")
+    if not path or not Path(path).exists():
+        return jsonify({"error": "无效的教案路径", "text": "", "total_chars": 0}), 400
+    try:
+        text = extract_lesson_plan(path)
+        if not text:
+            return jsonify({"error": "教案文本提取为空", "text": "", "total_chars": 0})
+        total = len(text)
+        preview = text[:500]
+        return jsonify({
+            "text": preview,
+            "total_chars": total,
+            "truncated": total > 500,
+        })
+    except Exception as e:
+        log.warning(f"教案预览失败 {path}: {e}")
+        return jsonify({"error": str(e), "text": "", "total_chars": 0}), 500
 
 
 @app.route("/api/jobs", methods=["POST"])
@@ -104,6 +134,10 @@ def create_job():
     pptx_path = data.get("pptx_path")
     if not pptx_path or not Path(pptx_path).exists():
         return jsonify({"error": "无效的 PPT 路径"}), 400
+
+    lesson_plan_path = data.get("lesson_plan_path")
+    if lesson_plan_path and not Path(lesson_plan_path).exists():
+        return jsonify({"error": "无效的教案路径"}), 400
 
     job = Job(
         job_id=uuid.uuid4().hex[:8],
@@ -116,6 +150,7 @@ def create_job():
         digital_human_mode=data.get("digital_human_mode", "auto"),
         enable_subtitle=bool(data.get("enable_subtitle", True)),
         enable_bgm=bool(data.get("enable_bgm", True)),
+        lesson_plan_path=lesson_plan_path,
     )
     submit_job(job, executor)
     return jsonify({"job_id": job.job_id, "status": job.status})
@@ -214,4 +249,4 @@ if __name__ == "__main__":
     log.info(f"上传目录：{UPLOAD_DIR}")
     log.info(f"输出目录：{OUTPUT_DIR}")
     log.info(f"资源目录：{ASSETS_DIR}")
-    app.run(host="0.0.0.0", port=7860, debug=False, threaded=True)
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 7860)), debug=False, threaded=True)

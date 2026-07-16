@@ -24,9 +24,12 @@ ASSETS_DIR = BASE_DIR / "assets"
 AVATAR_DIR = ASSETS_DIR / "avatars"
 BGM_DIR = ASSETS_DIR / "bgm"
 JOBS_FILE = BASE_DIR / "jobs.json"
+# 调试目录：每次任务记录 PPT 提取 / 教案提取 / LLM 文案合成结果
+DEBUG_DIR = BASE_DIR / "test_debug"
 
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+DEBUG_DIR.mkdir(parents=True, exist_ok=True)
 AVATAR_DIR.mkdir(parents=True, exist_ok=True)
 BGM_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -631,6 +634,180 @@ JOB_STATUS_FAILED = "failed"
 JOB_STATUS_CANCELED = "canceled"
 
 
+def _read_doc_with_com(path: Path) -> str:
+    """用 Word COM 读取 .doc 文件文本。需 pywin32 + 已安装 Word，失败抛异常。"""
+    import win32com.client
+    import pythoncom
+    pythoncom.CoInitialize()
+    app = None
+    doc = None
+    try:
+        app = win32com.client.Dispatch("Word.Application")
+        app.Visible = False
+        doc = app.Documents.Open(str(path.resolve()), ReadOnly=True)
+        return doc.Content.Text
+    finally:
+        try:
+            if doc:
+                doc.Close(False)
+        except Exception:
+            pass
+        try:
+            if app:
+                app.Quit()
+        except Exception:
+            pass
+
+
+def extract_lesson_plan(path: str) -> str:
+    """从教案文件提取纯文本。支持 txt/md/doc/docx，失败返回空串。
+
+    txt/md 直接读文本（utf-8 失败回退 gbk）；docx 用 python-docx 提取段落；
+    doc 用 Word COM 读取（需 pywin32 + Word）。
+    截断到 8000 字避免 LLM prompt 过长。
+    """
+    p = Path(path)
+    if not p.exists():
+        log.warning(f"教案文件不存在：{path}")
+        return ""
+    ext = p.suffix.lower()
+    try:
+        if ext in (".txt", ".md"):
+            try:
+                text = p.read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                text = p.read_text(encoding="gbk")
+        elif ext == ".docx":
+            from docx import Document
+            doc = Document(str(p))
+            text = "\n".join(para.text for para in doc.paragraphs if para.text.strip())
+        elif ext == ".doc":
+            text = _read_doc_with_com(p)
+        else:
+            log.warning(f"不支持的教案格式 {ext}：{path}")
+            return ""
+        text = text.strip()
+        if len(text) > 8000:
+            text = text[:8000]
+            log.info(f"教案过长，已截断到 8000 字（原始 {len(text)} 字）")
+        return text
+    except Exception as e:
+        log.warning(f"教案文本提取失败 {path}：{e}")
+        return ""
+
+
+# 教案标题正则：第X章/节、一、、1.、1、、# 标题、【标题】
+_LESSON_HEADING_RE = re.compile(
+    r"^(?:"
+    r"第[一二三四五六七八九十百千]+[章节部分]"
+    r"|[一二三四五六七八九十]+、"
+    r"|\d+[\.、)]"
+    r"|\#{1,6}\s+\S"
+    r"|【[^】]+】"
+    r")"
+)
+
+
+def extract_lesson_plan_sections(path: str) -> List[tuple]:
+    """从教案文件提取分段文本，返回 [(section_title, section_text), ...]。
+
+    按常见教案标题格式分段（第X章/节、一、、1.、# 标题、【标题】）。
+    无标题的文本归入"正文"段。用于按段匹配 PPT 页，避免整篇发给 LLM。
+    """
+    p = Path(path)
+    if not p.exists():
+        log.warning(f"教案文件不存在：{path}")
+        return []
+    ext = p.suffix.lower()
+    try:
+        if ext in (".txt", ".md"):
+            try:
+                text = p.read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                text = p.read_text(encoding="gbk")
+        elif ext == ".docx":
+            from docx import Document
+            doc = Document(str(p))
+            text = "\n".join(para.text for para in doc.paragraphs if para.text.strip())
+        elif ext == ".doc":
+            text = _read_doc_with_com(p)
+        else:
+            log.warning(f"不支持的教案格式 {ext}：{path}")
+            return []
+    except Exception as e:
+        log.warning(f"教案分段提取失败 {path}：{e}")
+        return []
+
+    sections: List[tuple] = []
+    cur_title = "正文"
+    cur_lines: List[str] = []
+    for line in text.splitlines():
+        line_stripped = line.strip()
+        if not line_stripped:
+            if cur_lines:
+                cur_lines.append("")
+            continue
+        if _LESSON_HEADING_RE.match(line_stripped):
+            if cur_lines:
+                sections.append((cur_title, "\n".join(cur_lines).strip()))
+            cur_title = line_stripped
+            cur_lines = []
+        else:
+            cur_lines.append(line_stripped)
+    if cur_lines:
+        sections.append((cur_title, "\n".join(cur_lines).strip()))
+
+    if not sections:
+        # 无任何内容
+        return []
+    log.info(f"教案分段完成：{len(sections)} 段")
+    return sections
+
+
+def _tokenize_zh(text: str) -> set:
+    """简易中文分词：按非字母数字字符分割，过滤单字符停用词。"""
+    # 按非字母数字（含中文标点、空格）分割
+    tokens = re.split(r"[^\w]+", text)
+    return {t.lower() for t in tokens if len(t) >= 2}
+
+
+def match_lesson_sections(scene: "Scene", sections: List[tuple]) -> str:
+    """选出与当前 PPT 页最相关的 1-2 个教案段，拼接后截断到 2000 字。
+
+    用 Jaccard 相似度（关键词集合交集/并集）匹配。全部为 0 时回退前 2000 字。
+    """
+    if not sections:
+        return ""
+    scene_text = scene.title + " " + " ".join(scene.bullets)
+    scene_tokens = _tokenize_zh(scene_text)
+    if not scene_tokens:
+        # 场景无关键词，回退前 2000 字
+        return "\n\n".join(f"【{t}】\n{c}" for t, c in sections)[:2000]
+
+    scored = []
+    for idx, (title, content) in enumerate(sections):
+        section_tokens = _tokenize_zh(title + " " + content)
+        if not section_tokens:
+            continue
+        inter = scene_tokens & section_tokens
+        union = scene_tokens | section_tokens
+        score = len(inter) / len(union) if union else 0.0
+        scored.append((score, idx, title, content))
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+    # 取相似度 > 0 的前 2 段
+    top = [s for s in scored if s[0] > 0][:2]
+    if not top:
+        # 全部为 0，回退前 2000 字
+        return "\n\n".join(f"【{t}】\n{c}" for t, c in sections)[:2000]
+
+    parts = [f"【{title}】\n{content}" for _, _, title, content in top]
+    result = "\n\n".join(parts)
+    if len(result) > 2000:
+        result = result[:2000]
+    return result
+
+
 @dataclass
 class Scene:
     index: int
@@ -657,6 +834,7 @@ class Job:
     digital_human_mode: str = "auto"  # auto=sadtalker优先 | static=静态头像
     enable_subtitle: bool = True
     enable_bgm: bool = True
+    lesson_plan_path: Optional[str] = None  # 教案文件路径（可选，传给 LLM 参考生成文案）
     scenes: List[Scene] = field(default_factory=list)
     output_path: Optional[str] = None
     error: Optional[str] = None
@@ -680,6 +858,7 @@ def _cleanup_job_files(job: "Job") -> List[str]:
     - uploads/{stem}.pdf               PPT 转 PDF 产物
     - uploads/_mineru_{stem}/          MinerU 解析结果目录
     - uploads/_slides_{stem}/          PDF 转 PNG 切片目录
+    - uploads/{教案文件}                教案上传文件（若存在）
     - output/{job_id}/                 输出工作目录（含 audio/ scenes/ final/ talking_head_*/）
     """
     import shutil
@@ -697,6 +876,9 @@ def _cleanup_job_files(job: "Job") -> List[str]:
             uploads_dir / f"_mineru_{stem}",       # MinerU 解析目录
             uploads_dir / f"_slides_{stem}",       # PNG 切片目录
         ]
+        # 教案文件（若存在）
+        if job.lesson_plan_path:
+            upload_artifacts.append(Path(job.lesson_plan_path))
         for p in upload_artifacts:
             try:
                 if p.is_dir():
@@ -967,10 +1149,12 @@ def _convert_pptx_to_pdf(pptx_path: Path) -> Optional[Path]:
     except Exception:
         pass
 
-    if _ppt_com_to_pdf(pptx_path, pdf_path):
+    com_ok = _ppt_com_to_pdf(pptx_path, pdf_path)
+    if com_ok:
         return pdf_path
 
-    if _soffice_to_pdf(pptx_path, pdf_path, timeout=180):
+    soff_ok = _soffice_to_pdf(pptx_path, pdf_path, timeout=180)
+    if soff_ok:
         time.sleep(1)
         return pdf_path
 
@@ -984,7 +1168,7 @@ def _pdf_to_images(pdf_path: Path, out_dir: Path):
         doc = pdfium.PdfDocument(str(pdf_path))
         for i in range(len(doc)):
             bitmap = doc[i].render(scale=2.0)
-            bitmap.to_pil().save(out_dir / f"slide_{i}.png", "PNG")
+            bitmap.to_pil().save(out_dir / f"slide_{i:03d}.png", "PNG")
         log.info(f"pypdfium2: PDF → {len(doc)} 张 PNG")
         return
     except ImportError:
@@ -996,13 +1180,124 @@ def _pdf_to_images(pdf_path: Path, out_dir: Path):
         from pdf2image import convert_from_path
         pages = convert_from_path(str(pdf_path), dpi=150)
         for i, page in enumerate(pages):
-            page.save(out_dir / f"slide_{i}.png", "PNG")
+            page.save(out_dir / f"slide_{i:03d}.png", "PNG")
         log.info(f"pdf2image: PDF → {len(pages)} 张 PNG")
     except Exception as e:
         log.warning(f"pdf 转图片失败：{e}")
 
 
 # ============ 2. 讲解稿生成 ============
+_SCRIPT_LLM_CACHE: Dict[str, str] = {}
+
+
+def generate_script_with_lesson_plan(scene: Scene, sections: List[tuple]) -> str:
+    """参考教案用 DeepSeek 把 PPT 要点扩展为完整口播文案。
+
+    接收教案分段列表 [(title, text), ...]，内部按 Jaccard 相似度选出与当前 PPT 页
+    最相关的 1-2 段喂给 LLM，避免整篇教案发送导致 token 浪费和相关性下降。
+    失败时回退到 generate_script(scene) 保持原有行为。
+    公式占位符 @@FORMULA@@ 在 LLM 阶段替换为 [公式: ...]，LLM 只生成文本部分，
+    公式仍由 latex_to_chinese_llm 单独处理。
+    """
+    if not sections:
+        return generate_script(scene)
+
+    api_key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
+    if not api_key:
+        return generate_script(scene)
+
+    # 匹配与本页最相关的教案段
+    matched_text = match_lesson_sections(scene, sections)
+    if not matched_text:
+        return generate_script(scene)
+
+    # 缓存 key：场景索引 + 匹配文本 hash + bullets hash
+    cache_key = f"{scene.index}_{hash(matched_text)}_{hash(tuple(scene.bullets))}"
+    if cache_key in _SCRIPT_LLM_CACHE:
+        return _SCRIPT_LLM_CACHE[cache_key]
+
+    # bullets 预处理：公式项转占位符，让 LLM 知道是公式但不读
+    bullets_for_llm = []
+    for b in scene.bullets:
+        if b.startswith("@@FORMULA@@"):
+            latex = b[len("@@FORMULA@@"):]
+            bullets_for_llm.append(f"[公式: {latex}]")
+        else:
+            bullets_for_llm.append(b)
+    bullets_text = "\n".join(f"- {b}" for b in bullets_for_llm if b)
+
+    system_prompt = (
+        "你是教学文案撰写助手。我会给你一段与当前 PPT 页相关的教案内容和这页 PPT 的要点，"
+        "请参考教案内容，把 PPT 要点扩展成自然流畅的口播文案。\n\n"
+        "要求：\n"
+        "1. 文案要口语化，适合朗读，避免书面语\n"
+        "2. 可以参考教案补充背景知识、过渡衔接、举例说明\n"
+        "3. 保持 PPT 原要点的核心信息，不要遗漏\n"
+        "4. 公式占位符 [公式: ...] 原样保留，不要尝试读公式\n"
+        "5. 单页文案控制在 300 字以内\n"
+        "6. 不要加\"大家好\"\"接下来\"等与 PPT 无关的套话\n"
+        "7. 直接输出文案，不要加解释说明"
+    )
+    user_content = (
+        f"【相关教案段落】\n{matched_text}\n\n"
+        f"【本页要点】\n标题：{scene.title}\n{bullets_text}"
+    )
+
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com/v1", timeout=60)
+        resp = client.chat.completions.create(
+            model="deepseek-chat",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_content},
+            ],
+            temperature=0.3,
+            max_tokens=800,
+        )
+        raw = resp.choices[0].message.content.strip()
+        if not raw:
+            log.warning("DeepSeek 文案生成返回空，回退 generate_script")
+            return generate_script(scene)
+
+        # 把 [公式: ...] 占位符替换回 @@FORMULA@@，再走原有公式转换流程
+        def _restore_formula(m):
+            return f"@@FORMULA@@{m.group(1)}"
+
+        raw = re.sub(r"\[公式:\s*(.*?)\s*\]", _restore_formula, raw)
+
+        # 按原有流程处理：拆分 parts，公式走 latex_to_chinese_llm，文本走 math_symbols_to_chinese
+        parts = []
+        # 用 @@FORMULA@@ 作为分隔标记切分
+        segments = re.split(r"(@@FORMULA@@[^\n]*)", raw)
+        for seg in segments:
+            if not seg.strip():
+                continue
+            if seg.startswith("@@FORMULA@@"):
+                latex = seg[len("@@FORMULA@@"):]
+                latex_fixed = latex.replace(r"\nu", "v")
+                spoken = latex_to_chinese_llm(latex_fixed)
+                spoken = math_symbols_to_chinese(spoken)
+                if spoken:
+                    parts.append(spoken + "。")
+            else:
+                # 普通文本段，按句号拆分后逐句清洗
+                for sentence in re.split(r"[。！？\n]", seg):
+                    s = sentence.strip().rstrip(".。")
+                    if s:
+                        parts.append(math_symbols_to_chinese(s) + "。")
+
+        text = " ".join(parts) if parts else raw
+        if len(text) > 400:
+            text = text[:400] + "..."
+        _SCRIPT_LLM_CACHE[cache_key] = text
+        log.info(f"[scene {scene.index}] 教案 LLM 文案生成成功（{len(text)} 字）")
+        return text
+    except Exception as e:
+        log.warning(f"DeepSeek 教案文案生成失败，回退 generate_script：{e}")
+        return generate_script(scene)
+
+
 def generate_script(scene: Scene) -> str:
     """把 title + bullets 拼成口播文案，公式转中文口播，超长截断不跨页"""
     parts = [math_symbols_to_chinese(scene.title) + "。"]
@@ -1378,11 +1673,34 @@ def run_job(job_id: str, executor: ThreadPoolExecutor):
     job.started_at = time.time()
     store.update(job_id, status=JOB_STATUS_RUNNING, stage="解析 PPT")
 
+    # 每次任务创建调试文档目录，记录 PPT 提取 / 教案提取 / LLM 文案合成结果
+    debug_job_dir = DEBUG_DIR / f"{job_id}_{time.strftime('%Y%m%d_%H%M%S')}"
+    debug_job_dir.mkdir(parents=True, exist_ok=True)
+
     try:
         log.info(f"[{job_id}] 开始解析 PPT")
         scenes = parse_pptx(job.pptx_path)
         job.scenes = scenes
         store.update(job_id, scenes=scenes, progress=0.15, stage=f"已解析 {len(scenes)} 页分镜")
+
+        # 记录 PPT 提取结果
+        ppt_lines = [
+            f"PPT 文件：{job.filename}",
+            f"总页数：{len(scenes)}",
+            f"提取时间：{time.strftime('%Y-%m-%d %H:%M:%S')}",
+            "=" * 60,
+            "",
+        ]
+        for sc in scenes:
+            ppt_lines.append(f"【第 {sc.index + 1} 页】标题：{sc.title}")
+            for b in sc.bullets:
+                if b.startswith("@@FORMULA@@"):
+                    ppt_lines.append(f"  - [公式] {b[len('@@FORMULA@@'):]}")
+                else:
+                    ppt_lines.append(f"  - {b}")
+            ppt_lines.append("")
+        (debug_job_dir / "01_ppt_extract.txt").write_text(
+            "\n".join(ppt_lines), encoding="utf-8")
 
         log.info(f"[{job_id}] 生成讲解稿并合成 TTS")
         work_dir = OUTPUT_DIR / job_id
@@ -1392,10 +1710,64 @@ def run_job(job_id: str, executor: ThreadPoolExecutor):
         for d in [work_dir, audio_dir, video_dir, final_dir]:
             d.mkdir(parents=True, exist_ok=True)
 
+        # 提取教案分段（若有），供 LLM 按段匹配生成文案
+        lesson_sections: List[tuple] = []
+        if job.lesson_plan_path and Path(job.lesson_plan_path).exists():
+            lesson_sections = extract_lesson_plan_sections(job.lesson_plan_path)
+            if lesson_sections:
+                log.info(f"[{job_id}] 教案已加载：{len(lesson_sections)} 段")
+            else:
+                log.warning(f"[{job_id}] 教案分段提取为空，将走默认文案流程")
+
+        # 记录教案提取结果
+        lp_lines = [
+            f"教案文件：{Path(job.lesson_plan_path).name if job.lesson_plan_path else '（未上传）'}",
+            f"提取时间：{time.strftime('%Y-%m-%d %H:%M:%S')}",
+            "=" * 60,
+            "",
+        ]
+        if lesson_sections:
+            lp_lines.append(f"共分段 {len(lesson_sections)} 段：")
+            lp_lines.append("")
+            for idx, (title, text) in enumerate(lesson_sections):
+                lp_lines.append(f"【段 {idx + 1}】{title}（{len(text)} 字）")
+                lp_lines.append(text)
+                lp_lines.append("")
+        else:
+            lp_lines.append("未提取到教案分段（将走默认文案流程，不调用 LLM）")
+        (debug_job_dir / "02_lesson_plan.txt").write_text(
+            "\n".join(lp_lines), encoding="utf-8")
+
+        # 记录每页最终文案
+        script_lines = [
+            f"任务 ID：{job_id}",
+            f"PPT 文件：{job.filename}",
+            f"文案路径：{'教案 LLM 生成' if lesson_sections else '默认规则生成'}",
+            f"生成时间：{time.strftime('%Y-%m-%d %H:%M:%S')}",
+            "=" * 60,
+            "",
+        ]
+
         for i, scene in enumerate(scenes):
             if store.get(job_id).status == JOB_STATUS_CANCELED:
                 raise RuntimeError("任务被取消")
-            scene.script = generate_script(scene)
+            used_llm = bool(lesson_sections)
+            if used_llm:
+                scene.script = generate_script_with_lesson_plan(scene, lesson_sections)
+            else:
+                scene.script = generate_script(scene)
+            # 追加本页文案记录
+            script_lines.append(f"【第 {scene.index + 1} 页】{scene.title}")
+            script_lines.append(f"生成路径：{'教案 LLM' if used_llm else '默认规则'}")
+            script_lines.append(f"字数：{len(scene.script)}")
+            script_lines.append("文案内容：")
+            script_lines.append(scene.script)
+            script_lines.append("-" * 60)
+            script_lines.append("")
+            # 每页生成后立即写入，避免中途失败丢失记录
+            (debug_job_dir / "03_llm_scripts.txt").write_text(
+                "\n".join(script_lines), encoding="utf-8")
+
             audio_file = audio_dir / f"scene_{i:03d}.mp3"
             scene.duration_sec = tts_synthesize(scene.script, job.voice, str(audio_file))
             scene.audio_path = str(audio_file)
