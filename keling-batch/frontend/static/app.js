@@ -3,6 +3,9 @@ const state = {
   pptxPath: null,
   pptxName: null,
   pptxSize: 0,
+  lessonPlanPath: null,
+  lessonPlanName: null,
+  lessonPlanSize: 0,
   avatar: 'teacher_female',
   voice: 'zh-CN-XiaoxiaoNeural',
   ratio: '16:9',
@@ -121,6 +124,20 @@ function bindEvents() {
   };
   fi.onchange = (e) => { if (e.target.files[0]) handleFile(e.target.files[0]); };
 
+  // 教案拖拽
+  const lpdz = $('lessonPlanDropzone');
+  const lpfi = $('lessonPlanInput');
+  lpdz.onclick = () => lpfi.click();
+  lpdz.ondragover = (e) => { e.preventDefault(); lpdz.classList.add('dragover'); };
+  lpdz.ondragleave = () => lpdz.classList.remove('dragover');
+  lpdz.ondrop = (e) => {
+    e.preventDefault();
+    lpdz.classList.remove('dragover');
+    if (e.dataTransfer.files[0]) handleLessonPlanFile(e.dataTransfer.files[0]);
+  };
+  lpfi.onchange = (e) => { if (e.target.files[0]) handleLessonPlanFile(e.target.files[0]); };
+  $('lessonPlanClear').onclick = clearLessonPlan;
+
   // 画幅 / 分辨率 / 数字人模式
   bindSeg('ratioSeg', 'ratio');
   bindSeg('resSeg', 'resolution');
@@ -172,6 +189,62 @@ async function handleFile(file) {
   toast('上传成功', 'success');
 }
 
+// ============ 教案上传 ============
+async function handleLessonPlanFile(file) {
+  const ext = file.name.toLowerCase().split('.').pop();
+  if (!['txt', 'md', 'doc', 'docx'].includes(ext)) {
+    toast('教案只支持 .txt / .md / .doc / .docx 文件', 'error');
+    return;
+  }
+  if (file.size > 20 * 1024 * 1024) {
+    toast('教案文件超过 20MB 限制', 'error');
+    return;
+  }
+  const form = new FormData();
+  form.append('file', file);
+  form.append('purpose', 'lesson_plan');
+  toast('教案上传中...');
+  const r = await api.upload('/api/upload', form);
+  if (r.error) { toast(r.error, 'error'); return; }
+  state.lessonPlanPath = r.path;
+  state.lessonPlanName = r.filename;
+  state.lessonPlanSize = r.size_mb;
+  $('lessonPlanInfo').hidden = false;
+  $('lpName').textContent = r.filename;
+  $('lpMeta').textContent = formatSize(r.size_mb);
+  $('lessonPlanClear').hidden = false;
+  toast('教案上传成功', 'success');
+  // 拉取提取内容预览
+  fetchLessonPlanPreview(r.path);
+}
+
+async function fetchLessonPlanPreview(path) {
+  $('lessonPlanPreview').hidden = false;
+  $('lpPreviewText').textContent = '提取中...';
+  $('lpCharCount').textContent = '—';
+  const r = await api.post('/api/lesson_plan_preview', { path });
+  if (r.error) {
+    $('lpPreviewText').textContent = '提取失败：' + r.error;
+    $('lpCharCount').textContent = '';
+    return;
+  }
+  $('lpPreviewText').textContent = r.text || '(空)';
+  $('lpCharCount').textContent = r.truncated ? `共 ${r.total_chars} 字（前 500 字）` : `共 ${r.total_chars} 字`;
+}
+
+function clearLessonPlan() {
+  state.lessonPlanPath = null;
+  state.lessonPlanName = null;
+  state.lessonPlanSize = 0;
+  $('lessonPlanInfo').hidden = true;
+  $('lessonPlanClear').hidden = true;
+  $('lessonPlanPreview').hidden = true;
+  $('lpPreviewText').textContent = '—';
+  $('lpCharCount').textContent = '—';
+  $('lessonPlanInput').value = '';
+  toast('已移除教案', 'success');
+}
+
 // ============ 提交任务 ============
 async function submitJob() {
   if (!state.pptxPath) { toast('请先上传 PPT', 'error'); return; }
@@ -185,6 +258,7 @@ async function submitJob() {
     digital_human_mode: state.digitalHumanMode,
     enable_subtitle: state.enableSubtitle,
     enable_bgm: state.enableBgm,
+    lesson_plan_path: state.lessonPlanPath,
   });
   if (r.error) { toast(r.error, 'error'); $('btnSubmit').disabled = false; return; }
   toast('任务已提交：' + r.job_id, 'success');

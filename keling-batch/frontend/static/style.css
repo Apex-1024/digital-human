@@ -98,6 +98,31 @@ body {
 .fi-name { font-weight: 600; color: #36d6c0; font-size: 0.9rem; word-break: break-all; }
 .fi-meta { color: #9aa1c7; font-size: 0.78rem; }
 
+.lesson-preview {
+  margin-top: 0.6rem;
+  padding: 0.6rem 0.9rem;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px;
+}
+.lp-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 0.4rem;
+}
+.lp-title { color: #9aa1c7; font-size: 0.78rem; font-weight: 600; }
+.lp-meta { color: #6b7299; font-size: 0.72rem; }
+.lp-text {
+  margin: 0;
+  max-height: 120px;
+  overflow-y: auto;
+  color: #c8cee8;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-family: inherit;
+}
+
 /* ============ 数字人选择 ============ */
 .avatar-grid {
   display: grid;
