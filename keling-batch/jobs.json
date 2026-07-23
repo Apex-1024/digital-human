@@ -1,9 +1,9 @@
 {
   "jobs": [
     {
-      "job_id": "7132de15",
-      "filename": "8aa244ea_2.1_1-.pptx",
-      "pptx_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\uploads\\8aa244ea_2.1_1-.pptx",
+      "job_id": "738ae7b2",
+      "filename": "412bcc40_2.1_1-.pptx",
+      "pptx_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\uploads\\412bcc40_2.1_1-.pptx",
       "status": "done",
       "progress": 1.0,
       "stage": "完成",
@@ -24,17 +24,53 @@
             "导数和微分不仅是微分学的两个基本概念，也是研究函数性质的基本方",
             "法"
           ],
-          "image_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\uploads\\_slides_8aa244ea_2.1_1-\\slide_000.png",
+          "image_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\uploads\\_slides_412bcc40_2.1_1-\\slide_000.png",
           "script": "引言。 为什么研究导数与微分。 导数和微分不仅是微分学的两个基本概念，也是研究函数性质的基本方。 法。",
-          "audio_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\output\\7132de15\\audio\\scene_000.mp3",
+          "audio_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\output\\738ae7b2\\audio\\scene_000.mp3",
           "duration_sec": 11.21
         }
       ],
-      "output_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\output\\7132de15\\final\\8aa244ea_2.1_1-.mp4",
+      "output_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\output\\738ae7b2\\final\\412bcc40_2.1_1-.mp4",
       "error": null,
-      "created_at": 1784645194.4860446,
-      "started_at": 1784645194.4942613,
-      "finished_at": 1784645349.7499902
+      "created_at": 1784802520.6281788,
+      "started_at": 1784802520.62918,
+      "finished_at": 1784802589.6557002
+    },
+    {
+      "job_id": "dada9c84",
+      "filename": "1837a61a_2.1_1-.pptx",
+      "pptx_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\uploads\\1837a61a_2.1_1-.pptx",
+      "status": "done",
+      "progress": 1.0,
+      "stage": "完成",
+      "avatar": "teacher_female",
+      "voice": "zh-CN-XiaoxiaoNeural",
+      "ratio": "16:9",
+      "resolution": "720p",
+      "digital_human_mode": "static",
+      "enable_subtitle": true,
+      "enable_bgm": true,
+      "lesson_plan_path": null,
+      "scenes": [
+        {
+          "index": 0,
+          "title": "引言",
+          "bullets": [
+            "为什么研究导数与微分",
+            "导数和微分不仅是微分学的两个基本概念，也是研究函数性质的基本方",
+            "法"
+          ],
+          "image_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\uploads\\_slides_1837a61a_2.1_1-\\slide_000.png",
+          "script": "引言。 为什么研究导数与微分。 导数和微分不仅是微分学的两个基本概念，也是研究函数性质的基本方。 法。",
+          "audio_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\output\\dada9c84\\audio\\scene_000.mp3",
+          "duration_sec": 11.21
+        }
+      ],
+      "output_path": "C:\\Users\\sun\\Desktop\\yuantu-test\\digital-human\\keling-batch\\output\\dada9c84\\final\\1837a61a_2.1_1-.mp4",
+      "error": null,
+      "created_at": 1784804453.1657467,
+      "started_at": 1784804453.1667767,
+      "finished_at": 1784804493.576162
     }
   ]
 }

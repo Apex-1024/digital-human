@@ -16,7 +16,8 @@
             "type": "debugpy",
             "request": "launch",
             "program": "${file}",
-            "console": "integratedTerminal"
+            "console": "integratedTerminal",
+            "python": "C:\\Users\\sun\\.pyenv\\pyenv-win\\versions\\3.11.9\\python.exe"
         }
     ]
-}
+}   
